@@ -1,0 +1,34 @@
+{
+  "schema": "labontology.skill-bundle.v1",
+  "suite_id": "suite:example",
+  "skills": [
+    {
+      "id": "skill:sample-preparation",
+      "name": "sample-preparation",
+      "description": "Prepare a sample according to an approved laboratory procedure.",
+      "parameters": [
+        {"name": "sample_id", "required": true, "default": null},
+        {"name": "volume_ml", "required": true, "default": null}
+      ],
+      "outputs": [
+        {"name": "artifact:prepared-sample", "format": "json", "path": "prepared_sample.json"}
+      ],
+      "required_capabilities": ["capability:liquid-transfer"],
+      "dependencies": [],
+      "side_effect_level": "device_task_create",
+      "entrypoints": ["scripts/prepare_sample.py"],
+      "documentation": {
+        "execution_order_hints": ["先确认样品和体积，再执行转移，最后记录结果。"],
+        "precondition_hints": ["样品信息已确认，设备连接可用。"],
+        "constraint_hints": ["未确认体积和容器时不得提交设备任务。"],
+        "device_evidence": ["调用液体转移设备完成样品制备。"]
+      },
+      "knowledge_files": [],
+      "status": "draft",
+      "validated": false,
+      "enabled": false
+    }
+  ],
+  "device_knowledge": [],
+  "workflows": []
+}

@@ -1,0 +1,7 @@
+# Keep this repository limited to the two LabOntology Skills.
+*
+!.gitignore
+!labontology-creator/
+!labontology-creator/**
+!labontology-run/
+!labontology-run/**

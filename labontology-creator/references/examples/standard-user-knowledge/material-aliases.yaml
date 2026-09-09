@@ -1,0 +1,6 @@
+kind: material_aliases
+source: user_provided
+aliases:
+  MeCN: acetonitrile
+  EtOAc: ethyl acetate
+status: maintained

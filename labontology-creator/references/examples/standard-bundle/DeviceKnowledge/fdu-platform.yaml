@@ -1,0 +1,16 @@
+id: device:fdu-platform
+name: FDU automation platform
+type: execution_environment
+capabilities:
+  - id: capability:liquid-transfer
+    name: liquid transfer
+    units: [uL, mL]
+actions:
+  - id: action:transfer-liquid
+    capability: capability:liquid-transfer
+    required_parameters: [source, destination, volume_ml]
+constraints:
+  - rule: destination must be a registered vessel
+    severity: critical
+  - rule: volume_ml must be within the calibrated range
+    severity: critical

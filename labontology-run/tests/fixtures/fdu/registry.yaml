@@ -1,0 +1,8 @@
+version: "0.2"
+suites:
+  - id: "suite:fdu"
+    name: "FDU Skill Suite"
+    root: "../../../../FduSkills"
+    skills_file: "fdu/skills.yaml"
+    flows_file: "fdu/flows.yaml"
+    policies_file: "fdu/policies.yaml"

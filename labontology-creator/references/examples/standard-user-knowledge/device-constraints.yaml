@@ -1,0 +1,10 @@
+kind: device_constraints
+source: user_provided
+device_id: device:fdu-platform
+constraints:
+  - parameter: volume_ml
+    minimum: 0.1
+    maximum: 20
+    unit: mL
+    basis: user-provided calibration note
+status: maintained

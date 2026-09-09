@@ -1,0 +1,16 @@
+id: workflow:sample-preparation
+name: Sample preparation
+status: maintained
+requires_confirmation: false
+nodes:
+  - id: flow-node:check-input
+    order: 1
+    skill_id: skill:sample-preparation
+    action: verify_inputs
+  - id: flow-node:prepare-sample
+    order: 2
+    skill_id: skill:sample-preparation
+    action: prepare
+    depends_on: [flow-node:check-input]
+expected_outputs:
+  - artifact:prepared-sample
