@@ -1,6 +1,7 @@
 """One-action execution loop directed by the host Agent, not an embedded LLM."""
 from __future__ import annotations
 
+import hashlib
 from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
@@ -72,6 +73,7 @@ class AgentRuntime:
             record["knowledge"] = {key: knowledge[key] for key in (
                 "description", "suite_id", "source_dir", "source_record_file", "parameters",
                 "confidence", "unresolved", "evidence", "capability_evidence", "knowledge_summary",
+                "instruction_source", "instruction_digest",
             ) if key in knowledge}
             documentation = knowledge.get("documentation", {})
             record["knowledge"]["documentation_files"] = documentation.get("files", []) if isinstance(documentation, dict) else []
@@ -127,6 +129,9 @@ class AgentRuntime:
             if "authorization" in assessment and not isinstance(assessment["authorization"], str):
                 raise ValueError("Existing authorization must cite the user's instruction")
             action["inputs"] = _artifact_paths(action.get("inputs", {}))
+            instruction_error = self._instruction_error(action, self.skills[action["skill_id"]])
+            if instruction_error:
+                raise ValueError(instruction_error)
             action["skill_snapshot"] = self._skill_snapshot(self.skills[action["skill_id"]])
             retry_error = self._retry_error(state, action, self.skills[action["skill_id"]])
             if retry_error:
@@ -161,6 +166,9 @@ class AgentRuntime:
                 "registry_file": knowledge.get("registry_file")}
 
     def _prerequisites(self, state: MissionState, action: dict, skill: SkillSpec) -> str | None:
+        instruction_error = self._instruction_error(action, skill)
+        if instruction_error:
+            return instruction_error
         if action.get("skill_snapshot") != self._skill_snapshot(skill):
             return "Selected Skill implementation or suite changed; reassess before execution"
         if any(p.blocked and skill.id in p.applies_to for p in self.policies):
@@ -174,6 +182,25 @@ class AgentRuntime:
             return f"Required inputs missing: {missing}"
         if skill.execution_mode != "agent" and (not skill.runnable or not skill.command):
             return "Skill has no runnable process command"
+        return None
+
+    def _instruction_error(self, action: dict[str, Any], skill: SkillSpec) -> str | None:
+        if skill.execution_mode == "agent":
+            return None
+        source = self.knowledge.get(skill.id, {}).get("instruction_source")
+        if not isinstance(source, dict) or not source.get("path") or not source.get("sha256"):
+            return None
+        path = Path(str(source["path"])).expanduser()
+        if not path.is_file():
+            return f"Skill document is unavailable: {path}"
+        actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual_hash != source["sha256"]:
+            return "Skill document changed; refresh the cache and reassess the action"
+        reviewed = action.get("reviewed_instruction")
+        if not isinstance(reviewed, dict):
+            return "Script Skill decision requires reviewed_instruction with the current path and sha256"
+        if str(reviewed.get("path")) != str(path.resolve()) or reviewed.get("sha256") != actual_hash:
+            return "reviewed_instruction does not match the current Skill document"
         return None
 
     def _retry_error(self, state: MissionState, action: dict[str, Any], skill: SkillSpec) -> str | None:

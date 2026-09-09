@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -35,6 +36,23 @@ def test_receive_bundle_writes_compact_cache_and_runtime_contract(tmp_path):
     skill = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("id") == "skill:reader")
     assert skill["properties"]["runtime"]["working_dir"] == str(source.resolve())
     assert any("entrypoint" in x["roles"] for x in json.loads((cache / "source-index.json").read_text())["sources"])
+
+
+def test_import_records_skill_document_hash_and_actionable_digest(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    document = source / "SKILL.md"
+    document.write_text("# Tool\n## 前提\n- 输入已核实。\n## 约束\n- 不得猜测输出路径。\n", encoding="utf-8")
+    cache = Path(receive_bundle(bundle(tmp_path, skills=[{
+        "id": "reader", "source_dir": str(source), "entrypoints": [], "outputs": [], "enabled": False,
+        "documentation": {"precondition_hints": ["输入已核实。"], "constraint_hints": ["不得猜测输出路径。"]},
+    }]), tmp_path)["output_dir"])
+    skill = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("id") == "skill:reader")
+    assert skill["properties"]["instruction_source"] == {
+        "path": str(document.resolve()),
+        "sha256": hashlib.sha256(document.read_bytes()).hexdigest(),
+    }
+    assert skill["properties"]["instruction_digest"] == ["输入已核实。", "不得猜测输出路径。"]
 
 
 def test_compact_maintenance_links_external_source_without_copy(tmp_path):

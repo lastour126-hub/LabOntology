@@ -28,7 +28,7 @@ labontology_<suite>_skill_cache/
 └── runs/
 ```
 
-`ontology.jsonl` is the canonical normalized graph. It contains `SkillSuite`, `Skill`, `SkillContract`, `ArtifactType`, optional `SkillFlow`/`FlowNode`, evidence summaries and runtime bindings. `source-index.json` contains external source paths and hashes; source `SKILL.md`, KB files and scripts remain in their original package directories. `runs/` belongs to Runtime and is never imported knowledge.
+`ontology.jsonl` is the canonical normalized graph. It contains `SkillSuite`, `Skill`, `SkillContract`, `ArtifactType`, optional `SkillFlow`/`FlowNode`, evidence summaries and runtime bindings. When a source Skill has `SKILL.md`, its `Skill` node also records `instruction_source` (path and SHA-256) plus a compact `instruction_digest` drawn from documented preconditions and constraints. `source-index.json` contains external source paths and hashes; source `SKILL.md`, KB files and scripts remain in their original package directories. `runs/` belongs to Runtime and is never imported knowledge.
 
 Do not create or restore `Skills/`, `Graph/`, `Workflow/`, or `DeviceKnowledge/` directories. They were a previous derived layout and are not supported by current cache maintenance.
 

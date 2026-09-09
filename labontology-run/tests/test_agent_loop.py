@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -50,6 +51,33 @@ def test_process_runs_one_chosen_action_without_a_flow(tmp_path):
     assert [r["skill_id"] for r in state.skill_executions.values()] == ["knowledge"]
     assert "observed" in runtime.context()["mission"]["observations"][-1]["stdout"]
     assert set(s["id"] for s in runtime.context()["skills"]) == {"knowledge", "device"}
+
+
+def test_process_skill_requires_current_skill_document_review(tmp_path):
+    document = tmp_path / "SKILL.md"
+    document.write_text("Do not guess output paths.", encoding="utf-8")
+    source = {"path": str(document), "sha256": hashlib.sha256(document.read_bytes()).hexdigest()}
+    skill = SkillSpec("script", [sys.executable, "-c", "print('done')"])
+    runtime = controller(tmp_path, [skill], skill_knowledge={"script": {
+        "instruction_source": source, "instruction_digest": ["Do not guess output paths."]}})
+    runtime.start("Run script")
+    assert runtime.context()["skills"][0]["knowledge"]["instruction_digest"] == ["Do not guess output paths."]
+    with pytest.raises(ValueError, match="reviewed_instruction"):
+        runtime.decide(choose("script"))
+    state = runtime.decide({**choose("script"), "reviewed_instruction": source})
+    assert state.status == "awaiting_decision"
+
+
+def test_process_skill_rejects_stale_document_review(tmp_path):
+    document = tmp_path / "SKILL.md"
+    document.write_text("v1", encoding="utf-8")
+    source = {"path": str(document), "sha256": hashlib.sha256(document.read_bytes()).hexdigest()}
+    skill = SkillSpec("script", [sys.executable, "-c", "print('done')"])
+    runtime = controller(tmp_path, [skill], skill_knowledge={"script": {"instruction_source": source}})
+    runtime.start("Run script")
+    document.write_text("v2", encoding="utf-8")
+    with pytest.raises(ValueError, match="changed"):
+        runtime.decide({**choose("script"), "reviewed_instruction": source})
 
 
 def test_start_skill_is_persisted_as_agent_hint(tmp_path):

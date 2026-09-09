@@ -39,6 +39,19 @@ Choose one Skill:
 
 Optional `inputs` maps artifact IDs to existing local paths. Required inputs and available capabilities are checked for both process and Agent Skills. Report actually established capabilities using `--capability ID`; do not invent them to bypass a block.
 
+### Skill document review
+
+When context for a process Skill contains `instruction_source`, read that current `SKILL.md` before choosing it. Add a receipt to the decision using the exact path and SHA-256 supplied by context:
+
+```json
+"reviewed_instruction": {
+  "path": "C:/lab-skills/example/SKILL.md",
+  "sha256": "<current hash from instruction_source>"
+}
+```
+
+Runtime checks that the document still exists and its hash still matches the cache before it accepts the action. A changed document requires a Creator refresh and a new assessment. This proves that the instructions were reviewed at the current revision; it does not replace the Agent's responsibility to follow them. Agent-mode Skills do not require a review receipt.
+
 To explicitly retry an eligible failed read-only process action, add `retry_of` to a normal Skill decision. The target must be the same Skill, have status `failed` or `timed_out`, be marked retryable, be read-only, and remain below its declared retry limit. Runtime rejects every other retry request and never generates a retry decision itself.
 
 Capability declarations persist within the mission across CLI commands. The Agent must still recheck actual availability before an operation if conditions change; a recorded capability is not a live device-health probe.

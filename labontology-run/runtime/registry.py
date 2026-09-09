@@ -181,6 +181,8 @@ class Registry:
                     "evidence": props.get("evidence", []),
                     "confidence": props.get("confidence"),
                     "documentation": props.get("documentation", {}),
+                    "instruction_source": props.get("instruction_source"),
+                    "instruction_digest": props.get("instruction_digest", []),
                     "knowledge_files": props.get("knowledge_files", []),
                     "suite_id": suite_id,
                     "graph_file": str(graph_path.resolve()),

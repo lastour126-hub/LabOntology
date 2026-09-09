@@ -106,6 +106,20 @@ def _source_record(path: Path, roles: list[str], skill_id: str | None = None, no
         result["note"] = note
     return result
 
+def _instruction_metadata(source_dir: Path, documentation: Any) -> dict[str, Any]:
+    document = source_dir / "SKILL.md"
+    if not document.is_file():
+        return {}
+    documentation = documentation if isinstance(documentation, dict) else {}
+    digest = list(dict.fromkeys(
+        str(item) for field in ("precondition_hints", "constraint_hints")
+        for item in _as_list(documentation.get(field)) if str(item).strip()
+    ))
+    return {
+        "instruction_source": {"path": str(document.resolve()), "sha256": _sha256(document)},
+        "instruction_digest": digest,
+    }
+
 def _runtime(skill: dict[str, Any], inferred_inputs: list[str] | None = None) -> dict[str, Any]:
     skill_id = _skill_id(skill)
     entrypoints = [Path(str(item)) for item in _as_list(skill.get("entrypoints"))]
@@ -236,6 +250,7 @@ def _graph_records(bundle: dict[str, Any]) -> tuple[list[dict[str, Any]], list[d
             f"runtime output binding missing: {artifact}" for artifact in unbound_outputs
         ]
         properties = {"name": str(skill.get("name") or skill_id), "description": skill.get("description"), "status": str(skill.get("status") or "draft"), "validated": bool(skill.get("validated", False)), "enabled": bool(skill.get("enabled", False)), "execution_mode": runtime["execution_mode"], "runnable": runtime["runnable"], "side_effect_level": runtime["side_effect_level"], "required_capabilities": runtime["required_capabilities"], "entrypoints": [str(item) for item in _as_list(skill.get("entrypoints"))], "unresolved": list(dict.fromkeys(unresolved)), "runtime": runtime}
+        properties.update(_instruction_metadata(Path(str(skill.get("source_dir") or runtime["working_dir"])), skill.get("documentation")))
         for key in ("documentation", "knowledge_files", "capability_evidence", "recommended_next_skills", "output_mode", "decision_policy"):
             if skill.get(key) not in ({}, [], None):
                 properties[key] = skill[key]
