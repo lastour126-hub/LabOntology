@@ -263,6 +263,20 @@ def main():
     assert any(item["field"] == "outputs" for item in manifest["contract_evidence"])
 
 
+def test_discovery_assigns_a_runtime_output_path_when_script_only_declares_output(tmp_path):
+    skill_dir = tmp_path / "writer"
+    (skill_dir / "scripts").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Writer\nWrites a JSON result.\n", encoding="utf-8")
+    (skill_dir / "scripts" / "write.py").write_text(
+        "import argparse\nimport json\np=argparse.ArgumentParser()\np.add_argument('--output', required=True)\njson.dump({}, open('unused', 'w'))\n",
+        encoding="utf-8",
+    )
+
+    manifest = discover_skill(skill_dir)
+
+    assert manifest["outputs"][0]["path"] == "output/result_<timestamp>.json"
+
+
 def test_cli_writes_discovery_report(tmp_path):
     skill_dir = tmp_path / "simple"
     skill_dir.mkdir()

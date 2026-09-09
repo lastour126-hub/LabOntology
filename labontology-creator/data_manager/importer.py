@@ -452,9 +452,11 @@ def _output_contract_data(
             })
             continue
         name = "artifact:result" if item["parameter"] == "output" else _artifact_id_from_path(item["parameter"])
+        suffix = item.get("format") or "json"
         outputs.setdefault(name, {
             "name": name,
             "format": item.get("format"),
+            "path": f"output/{name.removeprefix('artifact:')}_<timestamp>.{suffix}",
             "required": item["required"],
             "source": "script",
             "confidence": 0.7,
