@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 BUNDLE_SCHEMA = "labontology.skill-bundle.v1"
 CACHE_SCHEMA = "labontology.graph-cache.v1"
 MAINTAINABLE_KINDS = frozenset({"knowledge", "device", "workflow"})
@@ -59,6 +61,27 @@ def _skill_outputs(skill: dict[str, Any]) -> dict[str, Any]:
     if len(outputs) > 1:
         outputs.pop("artifact:result", None)
     return outputs
+
+def _declared_capabilities(root: Path) -> list[str]:
+    values: set[str] = set()
+    def collect(value: Any) -> None:
+        if isinstance(value, dict):
+            for item in value.values():
+                collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+        elif isinstance(value, str) and value.startswith("capability:"):
+            values.add(value)
+    for path in root.rglob("*") if root.exists() else []:
+        if not path.is_file() or path.suffix.lower() not in {".json", ".yaml", ".yml"}:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) if path.suffix.lower() == ".json" else yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, yaml.YAMLError):
+            continue
+        collect(data)
+    return sorted(values)
 
 def _source_record(path: Path, roles: list[str], skill_id: str | None = None, note: str | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {"path": str(path.resolve()), "roles": sorted(set(roles)), "sha256": _sha256(path)}
@@ -116,8 +139,9 @@ def _runtime(skill: dict[str, Any], inferred_inputs: list[str] | None = None) ->
             {"parameter": name, "positional": True} if parameter.get("positional")
             else {"parameter": name, "flag": "--" + name.replace("_", "-")}
         )
+    runtime_outputs = outputs if not output_parameters else {artifact: outputs[artifact] for artifact in bindings["outputs"]}
     return {"id": skill_id, "name": str(skill.get("name") or skill_id), "command": command,
-            "fixed_arguments": _as_list(skill.get("fixed_arguments")), "inputs": inputs, "outputs": outputs,
+            "fixed_arguments": _as_list(skill.get("fixed_arguments")), "inputs": inputs, "outputs": runtime_outputs,
             "parameters": [item for item in _as_list(skill.get("parameters")) if isinstance(item, dict)],
             "argument_bindings": {key: value for key, value in bindings.items() if value},
             "required_capabilities": [str(item) for item in _as_list(skill.get("required_capabilities"))],
@@ -163,7 +187,13 @@ def _workflow_records(skills: list[dict[str, Any]], workflows: list[dict[str, An
 def _graph_records(bundle: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     skills = [item for item in _as_list(bundle.get("skills")) if isinstance(item, dict)]
     suite_id = str(bundle["suite_id"])
-    records: list[dict[str, Any]] = [_entity(suite_id, "SkillSuite", {"name": suite_id, "skill_count": len(skills), "status": "maintained"})]
+    device_root = Path(str(bundle["_bundle_dir"])) / "DeviceKnowledge"
+    available_capabilities = set(_declared_capabilities(device_root))
+    available_capabilities.update(
+        str(capability) for skill in skills for capability in _as_list(skill.get("required_capabilities"))
+        if str(capability).startswith("capability:")
+    )
+    records: list[dict[str, Any]] = [_entity(suite_id, "SkillSuite", {"name": suite_id, "skill_count": len(skills), "status": "maintained", "available_capabilities": sorted(available_capabilities)})]
     sources: list[dict[str, Any]] = []
     outputs_by_skill = {_skill_id(skill): _skill_outputs(skill) for skill in skills}
     known_skill_ids = set(outputs_by_skill)
@@ -183,7 +213,11 @@ def _graph_records(bundle: dict[str, Any]) -> tuple[list[dict[str, Any]], list[d
         dependency_inputs = [artifact for dependency in dependency_map[skill_id]
                              for artifact in outputs_by_skill.get(str(dependency), {})]
         runtime = _runtime(skill, dependency_inputs)
-        properties = {"name": str(skill.get("name") or skill_id), "description": skill.get("description"), "status": str(skill.get("status") or "draft"), "validated": bool(skill.get("validated", False)), "enabled": bool(skill.get("enabled", False)), "execution_mode": runtime["execution_mode"], "runnable": runtime["runnable"], "side_effect_level": runtime["side_effect_level"], "required_capabilities": runtime["required_capabilities"], "entrypoints": [str(item) for item in _as_list(skill.get("entrypoints"))], "unresolved": _as_list(skill.get("unresolved")), "runtime": runtime}
+        unbound_outputs = sorted(set(_skill_outputs(skill)) - set(runtime["outputs"]))
+        unresolved = list(_as_list(skill.get("unresolved"))) + [
+            f"runtime output binding missing: {artifact}" for artifact in unbound_outputs
+        ]
+        properties = {"name": str(skill.get("name") or skill_id), "description": skill.get("description"), "status": str(skill.get("status") or "draft"), "validated": bool(skill.get("validated", False)), "enabled": bool(skill.get("enabled", False)), "execution_mode": runtime["execution_mode"], "runnable": runtime["runnable"], "side_effect_level": runtime["side_effect_level"], "required_capabilities": runtime["required_capabilities"], "entrypoints": [str(item) for item in _as_list(skill.get("entrypoints"))], "unresolved": list(dict.fromkeys(unresolved)), "runtime": runtime}
         for key in ("documentation", "knowledge_files", "capability_evidence", "recommended_next_skills", "output_mode", "decision_policy"):
             if skill.get(key) not in ({}, [], None):
                 properties[key] = skill[key]

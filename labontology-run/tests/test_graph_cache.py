@@ -1,6 +1,8 @@
 import json
 import sys
+from types import SimpleNamespace
 
+from runtime.commands import build_agent_runtime
 from runtime.registry import Registry
 
 
@@ -11,7 +13,8 @@ def _write_graph_cache(root):
         "schema": "labontology.skill-cache.graph.v1", "suite_id": "suite:graph", "updated_at": "2026-09-07"
     }), encoding="utf-8")
     entries = [
-        {"entity": {"id": "suite:graph", "type": "SkillSuite", "properties": {"name": "Graph suite"}}},
+        {"entity": {"id": "suite:graph", "type": "SkillSuite", "properties": {
+            "name": "Graph suite", "available_capabilities": ["capability:measure"]}}},
         {"entity": {"id": "skill:lookup", "type": "Skill", "properties": {
             "name": "Lookup", "description": "Find evidence", "runtime": {
                 "command": [sys.executable, "-c", "print('evidence')"], "inputs": [], "outputs": {},
@@ -34,3 +37,13 @@ def test_registry_loads_runtime_contract_and_evidence_from_one_graph(tmp_path):
     assert suite.skill_knowledge["lookup"]["description"] == "Find evidence"
     assert suite.skill_knowledge["lookup"]["unresolved"] == ["source date"]
     assert suite.flow_entries == {}
+    assert suite.available_capabilities == {"capability:measure"}
+
+
+def test_compact_cache_capabilities_are_available_to_agent_runtime(tmp_path):
+    cache = _write_graph_cache(tmp_path)
+    runtime = build_agent_runtime(SimpleNamespace(
+        system_dir=str(cache), registry=None, suite=None, capability=[],
+        runs_dir=str(tmp_path / "runs"), mission_id="capability-test",
+    ))
+    assert runtime.capabilities == {"capability:measure"}

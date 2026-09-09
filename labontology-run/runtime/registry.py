@@ -52,6 +52,7 @@ class SkillSuite:
     skills: dict[str, SkillSpec]
     flow_entries: dict[str, Path | SkillFlow]
     policies: list[ExecutionPolicySpec]
+    available_capabilities: set[str] = field(default_factory=set)
     skill_knowledge: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def skill_flow(self, flow_id: str) -> SkillFlow:
@@ -111,6 +112,7 @@ class Registry:
                 skills=skills,
                 flow_entries=flow_entries,
                 policies=policies,
+                available_capabilities=set(),
                 skill_knowledge=knowledge,
             )
         return cls(suites)
@@ -203,7 +205,8 @@ class Registry:
                                   "inputs": props.get("inputs", []), "outputs": props.get("outputs", [])})
                 flow_entries[flow_id] = SkillFlow.from_dict({"id": flow_id, "nodes": nodes})
             suites[suite_id] = SkillSuite(suite_id, suite_entity.get("properties", {}).get("name", suite_id),
-                                          system_dir, skills, flow_entries, [], knowledge)
+                                          system_dir, skills, flow_entries, [],
+                                          set(suite_entity.get("properties", {}).get("available_capabilities", [])), knowledge)
         if not suites:
             raise ValueError(f"Canonical graph contains no SkillSuite: {graph_path}")
         return cls(suites)

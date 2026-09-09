@@ -112,6 +112,8 @@ def test_import_binds_format_specific_output_parameter(tmp_path):
     assert skill["properties"]["runtime"]["argument_bindings"]["outputs"]["artifact:table"] == {
         "parameter": "csv_output", "flag": "--csv-output"
     }
+    assert skill["properties"]["runtime"]["outputs"] == {"artifact:table": "outputs/table.csv"}
+    assert "runtime output binding missing: artifact:report" in skill["properties"]["unresolved"]
 
 
 def test_import_derives_dependency_artifacts_and_reference_edge(tmp_path):
@@ -153,3 +155,22 @@ def test_import_writes_each_entity_id_once_and_manifest_counts_unique_entities(t
     manifest = json.loads((cache / "cache-manifest.json").read_text(encoding="utf-8"))
     assert len(entity_ids) == len(set(entity_ids))
     assert manifest["entity_count"] == len(entity_ids)
+
+
+def test_import_reads_explicit_capabilities_from_device_knowledge(tmp_path):
+    source = bundle(tmp_path)
+    (source / "DeviceKnowledge" / "platform.yaml").write_text(
+        "capabilities:\n  - id: capability:liquid-transfer\n", encoding="utf-8"
+    )
+    cache = Path(receive_bundle(source, tmp_path)["output_dir"])
+    suite = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("type") == "SkillSuite")
+    assert suite["properties"]["available_capabilities"] == ["capability:liquid-transfer"]
+
+
+def test_import_uses_skill_capability_contract_when_no_device_file_exists(tmp_path):
+    cache = Path(receive_bundle(bundle(tmp_path, skills=[{
+        "id": "liquid", "source_dir": str(tmp_path), "entrypoints": [], "outputs": [],
+        "required_capabilities": ["capability:liquid-transfer"], "enabled": False,
+    }]), tmp_path)["output_dir"])
+    suite = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("type") == "SkillSuite")
+    assert suite["properties"]["available_capabilities"] == ["capability:liquid-transfer"]

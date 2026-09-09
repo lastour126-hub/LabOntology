@@ -68,7 +68,7 @@ def build_agent_runtime(args: argparse.Namespace) -> AgentRuntime:
         } for flow_id, path in suite.flow_entries.items())
     return AgentRuntime(
         skills, SkillInvoker(), _mission_store(args),
-        available_capabilities=set(args.capability), policies=policies,
+        available_capabilities=set(args.capability).union(*(suite.available_capabilities for suite in suites)), policies=policies,
         skill_knowledge=knowledge, workflow_references=workflows,
     )
 
