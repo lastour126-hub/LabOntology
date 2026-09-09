@@ -80,6 +80,26 @@ def test_invoker_binds_declared_decision_arguments_to_cli_parameters(tmp_path):
     assert (tmp_path / "run" / "result.txt").read_text(encoding="utf-8") == "verified:True"
 
 
+def test_invoker_places_subcommand_before_its_option_arguments(tmp_path):
+    skill = SkillSpec(
+        id="skill:subcommand",
+        command=[
+            sys.executable,
+            "-c",
+            "import argparse, os; from pathlib import Path; p=argparse.ArgumentParser(); s=p.add_subparsers(dest='action', required=True); q=s.add_parser('workqueue'); q.add_argument('--host', required=True); a=p.parse_args(); Path(os.environ['SKILL_OUTPUT_RESULT']).write_text(a.action + ':' + a.host)",
+        ],
+        outputs={"artifact:result": "result.txt"},
+        argument_bindings={
+            "parameters": {"host": {"flag": "--host"}, "action": {"positional": True}},
+        },
+    )
+
+    run = SkillInvoker().run(skill, tmp_path / "run", arguments={"host": "127.0.0.1", "action": "workqueue"})
+
+    assert run.status == "succeeded"
+    assert (tmp_path / "run" / "result.txt").read_text(encoding="utf-8") == "workqueue:127.0.0.1"
+
+
 def test_invoker_resolves_run_directory_values_for_required_auxiliary_arguments(tmp_path):
     skill = SkillSpec(
         id="skill:aux",

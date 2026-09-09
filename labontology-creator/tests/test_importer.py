@@ -65,6 +65,29 @@ parser.add_argument('--output-path', required=True)
     assert positional["positional"] is True
 
 
+def test_discovery_extracts_argparse_subcommand_as_constrained_positional(tmp_path):
+    skill_dir = tmp_path / "service-client"
+    (skill_dir / "scripts").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Service client\n", encoding="utf-8")
+    (skill_dir / "scripts" / "client.py").write_text(
+        """import argparse
+p = argparse.ArgumentParser()
+commands = p.add_subparsers(dest='action', required=True)
+commands.add_parser('status')
+commands.add_parser('launch')
+""",
+        encoding="utf-8",
+    )
+
+    manifest = discover_skill(skill_dir)
+
+    assert {item["name"] for item in manifest["parameters"]} == {"action"}
+    assert manifest["parameters"][0] == {
+        "name": "action", "required": True, "default": None,
+        "positional": True, "choices": ["launch", "status"],
+    }
+
+
 def test_discovery_handles_nonstandard_layout_and_emits_json(tmp_path):
     root = tmp_path / "vendor-package"
     (root / "cli").mkdir(parents=True)
@@ -275,6 +298,27 @@ def test_discovery_assigns_a_runtime_output_path_when_script_only_declares_outpu
     manifest = discover_skill(skill_dir)
 
     assert manifest["outputs"][0]["path"] == "output/result_<timestamp>.json"
+
+
+def test_discovery_models_output_directory_without_file_extension(tmp_path):
+    skill_dir = tmp_path / "directory-writer"
+    (skill_dir / "scripts").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Directory writer\nWrites files to a directory.\n", encoding="utf-8")
+    (skill_dir / "scripts" / "write.py").write_text(
+        "import argparse\np=argparse.ArgumentParser()\np.add_argument('--output-dir', required=True)\n",
+        encoding="utf-8",
+    )
+
+    manifest = discover_skill(skill_dir)
+
+    assert manifest["outputs"] == [{
+        "name": "artifact:output-dir",
+        "format": None,
+        "path": "output/output-dir_<timestamp>",
+        "required": True,
+        "source": "script",
+        "confidence": 0.7,
+    }]
 
 
 def test_cli_writes_discovery_report(tmp_path):

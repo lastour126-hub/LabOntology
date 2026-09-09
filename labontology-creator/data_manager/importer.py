@@ -245,6 +245,32 @@ def _python_parameters(path: Path) -> tuple[list[dict[str, Any]], list[dict[str,
     except SyntaxError:
         return [], [_evidence("python_ast", path, "syntax error; skipped")]
     parameters: list[dict[str, Any]] = []
+    subparser_destinations: dict[str, tuple[str, bool]] = {}
+    subparser_choices: dict[str, list[str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+            continue
+        call = node.value
+        if not isinstance(call.func, ast.Attribute) or call.func.attr != "add_subparsers":
+            continue
+        destination = next((keyword.value.value for keyword in call.keywords
+                            if keyword.arg == "dest" and isinstance(keyword.value, ast.Constant)
+                            and isinstance(keyword.value.value, str)), None)
+        if not destination:
+            continue
+        required = next((keyword.value.value for keyword in call.keywords
+                         if keyword.arg == "required" and isinstance(keyword.value, ast.Constant)), False)
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                subparser_destinations[target.id] = (destination, required is True)
+                subparser_choices.setdefault(target.id, [])
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute) or node.func.attr != "add_parser":
+            continue
+        if not isinstance(node.func.value, ast.Name) or node.func.value.id not in subparser_destinations:
+            continue
+        if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+            subparser_choices[node.func.value.id].append(node.args[0].value)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute) or node.func.attr != "add_argument":
             continue
@@ -266,6 +292,9 @@ def _python_parameters(path: Path) -> tuple[list[dict[str, Any]], list[dict[str,
         if option_name is None and positional_name is not None:
             parameter["positional"] = True
         parameters.append(parameter)
+    for variable, (destination, required) in subparser_destinations.items():
+        parameters.append({"name": destination, "required": required, "default": None,
+                           "positional": True, "choices": sorted(set(subparser_choices[variable]))})
     return parameters, [_evidence("python_ast", path, "argparse.add_argument")]
 
 
@@ -453,10 +482,15 @@ def _output_contract_data(
             continue
         name = "artifact:result" if item["parameter"] == "output" else _artifact_id_from_path(item["parameter"])
         suffix = item.get("format") or "json"
+        is_directory = bool(re.search(r"(?:^|_)(?:output|result)?_?dir(?:ectory)?$", item["parameter"], re.I))
         outputs.setdefault(name, {
             "name": name,
             "format": item.get("format"),
-            "path": f"output/{name.removeprefix('artifact:')}_<timestamp>.{suffix}",
+            "path": (
+                f"output/{name.removeprefix('artifact:')}_<timestamp>"
+                if is_directory
+                else f"output/{name.removeprefix('artifact:')}_<timestamp>.{suffix}"
+            ),
             "required": item["required"],
             "source": "script",
             "confidence": 0.7,

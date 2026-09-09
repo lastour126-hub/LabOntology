@@ -332,7 +332,11 @@ def _write_compact_cache(cache: Path, bundle: dict[str, Any]) -> None:
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
     records, sources = _graph_records(bundle)
-    (staging / "runs").mkdir()
+    existing_runs = cache / "runs"
+    if existing_runs.is_dir():
+        shutil.copytree(existing_runs, staging / "runs")
+    else:
+        (staging / "runs").mkdir()
     (staging / "ontology.jsonl").write_text("\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n", encoding="utf-8")
     (staging / "source-index.json").write_text(json.dumps({"schema": "labontology.source-index.v1", "sources": sources}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     timestamp = _now()

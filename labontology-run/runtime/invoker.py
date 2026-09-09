@@ -64,15 +64,16 @@ class SkillInvoker:
             output_paths[artifact_id] = str(path)
         command = list(skill.command) + list(skill.fixed_arguments)
         bindings = skill.argument_bindings if isinstance(skill.argument_bindings, dict) else {}
-        for artifact_id, binding in (bindings.get("inputs", {}) or {}).items():
-            if artifact_id in (inputs or {}):
-                _append_binding(command, binding, str(inputs[artifact_id]), run_dir)
-        for parameter, binding in (bindings.get("parameters", {}) or {}).items():
-            if parameter in (arguments or {}):
-                _append_binding(command, binding, arguments[parameter], run_dir)
-        for artifact_id, binding in (bindings.get("outputs", {}) or {}).items():
-            if artifact_id in output_paths:
-                _append_binding(command, binding, output_paths[artifact_id], run_dir)
+        binding_sets = [
+            (bindings.get("inputs", {}) or {}, inputs or {}),
+            (bindings.get("parameters", {}) or {}, arguments or {}),
+            (bindings.get("outputs", {}) or {}, output_paths),
+        ]
+        for positional in (True, False):
+            for declared, values in binding_sets:
+                for name, binding in declared.items():
+                    if name in values and isinstance(binding, dict) and bool(binding.get("positional")) is positional:
+                        _append_binding(command, binding, values[name], run_dir)
         try:
             completed = subprocess.run(
                 command,

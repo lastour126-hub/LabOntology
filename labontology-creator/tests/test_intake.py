@@ -79,6 +79,17 @@ def test_compact_reimport_replaces_generated_cache(tmp_path):
     assert not stale.exists()
 
 
+def test_compact_reimport_preserves_runtime_mission_records(tmp_path):
+    cache = Path(receive_bundle(bundle(tmp_path, suite="suite:one"), tmp_path)["output_dir"])
+    mission = cache / "runs" / "mission-1"
+    mission.mkdir()
+    (mission / "state.json").write_text('{"status": "awaiting_decision"}', encoding="utf-8")
+
+    receive_bundle(bundle(tmp_path / "second", suite="suite:one"), tmp_path)
+
+    assert (cache / "runs" / "mission-1" / "state.json").read_text(encoding="utf-8") == '{"status": "awaiting_decision"}'
+
+
 def test_each_suite_gets_a_separate_compact_cache(tmp_path):
     first = receive_bundle(bundle(tmp_path / "one", suite="suite:one"), tmp_path)
     second = receive_bundle(bundle(tmp_path / "two", suite="suite:two"), tmp_path)
