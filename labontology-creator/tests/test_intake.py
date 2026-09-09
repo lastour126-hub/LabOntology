@@ -125,14 +125,17 @@ def test_import_exposes_non_output_parameters_as_runtime_argument_bindings(tmp_p
             {"name": "table_file", "required": True},
             {"name": "test", "default": False},
             {"name": "output", "required": True},
+            {"name": "csv_output", "default": ""},
         ],
-        "outputs": [{"name": "artifact:parsed", "path": "outputs/parsed.json"}], "enabled": False,
+        "outputs": [{"name": "artifact:parsed", "path": "outputs/parsed.json",
+                     "binding": {"parameter": "output", "flag": "--output"}}], "enabled": False,
     }]), tmp_path)["output_dir"])
     skill = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("id") == "skill:parser")
     assert skill["properties"]["runtime"]["argument_bindings"]["parameters"] == {
         "text": {"parameter": "text", "flag": "--text"},
         "table_file": {"parameter": "table_file", "flag": "--table-file"},
         "test": {"parameter": "test", "flag": "--test"},
+        "csv_output": {"parameter": "csv_output", "flag": "--csv-output"},
     }
 
 

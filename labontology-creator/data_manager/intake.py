@@ -174,6 +174,17 @@ def _runtime(skill: dict[str, Any], inferred_inputs: list[str] | None = None) ->
             {"parameter": name, "positional": True} if parameter.get("positional")
             else {"parameter": name, "flag": "--" + name.replace("_", "-")}
         )
+    bound_output_parameters = {
+        str(binding.get("parameter")) for binding in bindings["outputs"].values()
+        if isinstance(binding, dict) and binding.get("parameter")
+    }
+    for parameter in output_parameters:
+        name = str(parameter["name"])
+        if name not in bound_output_parameters:
+            bindings["parameters"][name] = (
+                {"parameter": name, "positional": True} if parameter.get("positional")
+                else {"parameter": name, "flag": "--" + name.replace("_", "-")}
+            )
     runtime_outputs = outputs if not output_parameters else {artifact: outputs[artifact] for artifact in bindings["outputs"]}
     return {"id": skill_id, "name": str(skill.get("name") or skill_id), "command": command,
             "fixed_arguments": _as_list(skill.get("fixed_arguments")), "inputs": inputs, "outputs": runtime_outputs,
