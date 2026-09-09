@@ -131,7 +131,7 @@ def _runtime(skill: dict[str, Any], inferred_inputs: list[str] | None = None) ->
             if artifact not in bindings["outputs"] and _safe_name(artifact.removeprefix("artifact:")) == normalized:
                 bindings["inputs"][artifact] = binding
         for artifact in outputs:
-            if _safe_name(artifact.removeprefix("artifact:")) == normalized:
+            if artifact not in bindings["outputs"] and _safe_name(artifact.removeprefix("artifact:")) == normalized:
                 bindings["outputs"][artifact] = binding
     output_parameters = [item for item in _as_list(skill.get("parameters"))
                          if isinstance(item, dict) and item.get("name")

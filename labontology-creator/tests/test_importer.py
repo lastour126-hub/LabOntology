@@ -258,6 +258,7 @@ def main():
         "required": True,
         "source": "script_and_documentation",
         "confidence": 0.9,
+        "binding": {"parameter": "output", "flag": "--output"},
     }]
     assert any(item["field"] == "outputs" for item in manifest["contract_evidence"])
 

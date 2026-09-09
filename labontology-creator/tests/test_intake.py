@@ -119,17 +119,17 @@ def test_import_binds_format_specific_output_parameter(tmp_path):
 def test_import_prefers_explicit_output_binding_over_name_inference(tmp_path):
     cache = Path(receive_bundle(bundle(tmp_path, skills=[{
         "id": "writer", "source_dir": str(tmp_path), "entrypoints": [],
-        "parameters": [{"name": "destination"}],
+        "parameters": [{"name": "destination"}, {"name": "output"}],
         "outputs": [{
-            "name": "artifact:report", "path": "outputs/report.json",
+            "name": "artifact:output", "path": "outputs/report.json",
             "binding": {"parameter": "destination", "flag": "--destination"},
         }], "enabled": False,
     }]), tmp_path)["output_dir"])
     skill = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("id") == "skill:writer")
     assert skill["properties"]["runtime"]["argument_bindings"]["outputs"] == {
-        "artifact:report": {"parameter": "destination", "flag": "--destination"}
+        "artifact:output": {"parameter": "destination", "flag": "--destination"}
     }
-    assert skill["properties"]["runtime"]["outputs"] == {"artifact:report": "outputs/report.json"}
+    assert skill["properties"]["runtime"]["outputs"] == {"artifact:output": "outputs/report.json"}
 
 
 def test_import_derives_dependency_artifacts_and_reference_edge(tmp_path):

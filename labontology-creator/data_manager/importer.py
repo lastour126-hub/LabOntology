@@ -439,6 +439,10 @@ def _output_contract_data(
             matching["required"] = item["required"]
             matching["source"] = "script_and_documentation"
             matching["confidence"] = 0.9
+            matching["binding"] = {
+                "parameter": item["parameter"],
+                "flag": "--" + item["parameter"].replace("_", "-"),
+            }
             evidence.append({
                 "field": "outputs",
                 "source": "script_and_documentation",
