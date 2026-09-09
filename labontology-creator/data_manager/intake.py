@@ -62,6 +62,21 @@ def _skill_outputs(skill: dict[str, Any]) -> dict[str, Any]:
         outputs.pop("artifact:result", None)
     return outputs
 
+def _explicit_output_bindings(value: Any) -> dict[str, dict[str, Any]]:
+    """Read per-output invocation bindings without guessing parameter names."""
+    items = value.items() if isinstance(value, dict) else enumerate(_as_list(value))
+    bindings: dict[str, dict[str, Any]] = {}
+    for key, item in items:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name") or item.get("id") or key
+        binding = item.get("binding")
+        if not name or not isinstance(binding, dict) or not binding.get("parameter"):
+            continue
+        normalized = {field: binding[field] for field in ("parameter", "flag", "positional", "additional_flags", "value") if field in binding}
+        bindings[_artifact_id(name)] = normalized
+    return bindings
+
 def _declared_capabilities(root: Path) -> list[str]:
     values: set[str] = set()
     def collect(value: Any) -> None:
@@ -102,7 +117,10 @@ def _runtime(skill: dict[str, Any], inferred_inputs: list[str] | None = None) ->
         command = ["python", str(entrypoint)] if entrypoint else []
     inputs = list(dict.fromkeys([_artifact_id(item) for item in _as_list(skill.get("inputs"))] + list(inferred_inputs or [])))
     outputs = _skill_outputs(skill)
-    bindings: dict[str, dict[str, Any]] = {"inputs": {}, "outputs": {}}
+    bindings: dict[str, dict[str, Any]] = {"inputs": {}, "outputs": {
+        artifact: binding for artifact, binding in _explicit_output_bindings(skill.get("outputs")).items()
+        if artifact in outputs
+    }}
     for parameter in _as_list(skill.get("parameters")):
         if not isinstance(parameter, dict) or not parameter.get("name"):
             continue
@@ -110,7 +128,7 @@ def _runtime(skill: dict[str, Any], inferred_inputs: list[str] | None = None) ->
         binding = {"parameter": name, "positional": True} if parameter.get("positional") else {"parameter": name, "flag": "--" + name.replace("_", "-")}
         normalized = _safe_name(name)
         for artifact in inputs:
-            if _safe_name(artifact.removeprefix("artifact:")) == normalized:
+            if artifact not in bindings["outputs"] and _safe_name(artifact.removeprefix("artifact:")) == normalized:
                 bindings["inputs"][artifact] = binding
         for artifact in outputs:
             if _safe_name(artifact.removeprefix("artifact:")) == normalized:

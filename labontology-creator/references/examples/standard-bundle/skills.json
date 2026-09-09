@@ -8,10 +8,16 @@
       "description": "Prepare a sample according to an approved laboratory procedure.",
       "parameters": [
         {"name": "sample_id", "required": true, "default": null},
-        {"name": "volume_ml", "required": true, "default": null}
+        {"name": "volume_ml", "required": true, "default": null},
+        {"name": "output", "required": true, "default": null}
       ],
       "outputs": [
-        {"name": "artifact:prepared-sample", "format": "json", "path": "prepared_sample.json"}
+        {
+          "name": "artifact:prepared-sample",
+          "format": "json",
+          "path": "prepared_sample.json",
+          "binding": {"parameter": "output", "flag": "--output"}
+        }
       ],
       "required_capabilities": ["capability:liquid-transfer"],
       "dependencies": [],
