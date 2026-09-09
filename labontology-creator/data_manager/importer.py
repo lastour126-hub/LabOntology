@@ -424,7 +424,9 @@ def _python_output_parameters(path: Path) -> list[dict[str, Any]]:
         parameters.append({"parameter": name, "required": required is True, "format": parameter_format})
 
     source_text = path.read_text(encoding="utf-8", errors="replace").lower()
-    if "json.dump" in source_text or "json.dumps" in source_text:
+    if ".mmd" in source_text:
+        detected_format = "mmd"
+    elif "json.dump" in source_text or "json.dumps" in source_text:
         detected_format = "json"
     elif "to_csv" in source_text or "csv.writer" in source_text:
         detected_format = "csv"

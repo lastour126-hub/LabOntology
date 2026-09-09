@@ -321,6 +321,21 @@ def test_discovery_models_output_directory_without_file_extension(tmp_path):
     }]
 
 
+def test_discovery_detects_mermaid_script_output_format(tmp_path):
+    skill_dir = tmp_path / "visualizer"
+    (skill_dir / "scripts").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Visualizer\nWrites Mermaid.\n", encoding="utf-8")
+    (skill_dir / "scripts" / "visualize.py").write_text(
+        "import argparse\np=argparse.ArgumentParser()\np.add_argument('--output')\nPath('x').with_suffix('.mmd')\n",
+        encoding="utf-8",
+    )
+
+    manifest = discover_skill(skill_dir)
+
+    assert manifest["outputs"][0]["format"] == "mmd"
+    assert manifest["outputs"][0]["path"] == "output/result_<timestamp>.mmd"
+
+
 def test_cli_writes_discovery_report(tmp_path):
     skill_dir = tmp_path / "simple"
     skill_dir.mkdir()
