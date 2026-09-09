@@ -42,3 +42,13 @@ def test_maintenance_replaces_same_external_source_record(tmp_path):
     records = [item for item in index["sources"] if item["path"] == str(source.resolve())]
     assert len(records) == 1
     assert records[0]["sha256"]
+
+
+def test_maintenance_updates_cache_manifest_timestamp(tmp_path):
+    cache = make_cache(tmp_path)
+    before = json.loads((cache / "cache-manifest.json").read_text(encoding="utf-8"))["updated_at"]
+    source = tmp_path / "rule.md"
+    source.write_text("v1", encoding="utf-8")
+    maintain_cache(cache, source, kind="knowledge")
+    manifest = json.loads((cache / "cache-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["updated_at"] >= before

@@ -80,3 +80,76 @@ def test_graph_preserves_explicit_workflow_as_reference(tmp_path):
     cache = Path(receive_bundle(root, tmp_path)["output_dir"])
     graph = read_graph(cache)
     assert any(x.get("entity", {}).get("type") == "SkillFlow" for x in graph)
+
+
+def test_import_binds_a_single_declared_output_to_output_parameter(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    script = source / "run.py"
+    script.write_text("print('ok')", encoding="utf-8")
+    cache = Path(receive_bundle(bundle(tmp_path, skills=[{
+        "id": "writer", "source_dir": str(source), "entrypoints": [str(script)],
+        "parameters": [{"name": "output", "required": True}],
+        "outputs": [{"name": "artifact:report", "path": "outputs/report.json"}],
+        "status": "draft", "enabled": False,
+    }]), tmp_path)["output_dir"])
+    skill = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("id") == "skill:writer")
+    assert skill["properties"]["runtime"]["argument_bindings"]["outputs"] == {
+        "artifact:report": {"parameter": "output", "flag": "--output"}
+    }
+
+
+def test_import_binds_format_specific_output_parameter(tmp_path):
+    cache = Path(receive_bundle(bundle(tmp_path, skills=[{
+        "id": "writer", "source_dir": str(tmp_path), "entrypoints": [],
+        "parameters": [{"name": "output"}, {"name": "csv_output"}],
+        "outputs": [
+            {"name": "artifact:report", "path": "outputs/report.json"},
+            {"name": "artifact:table", "path": "outputs/table.csv"},
+        ], "enabled": False,
+    }]), tmp_path)["output_dir"])
+    skill = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("id") == "skill:writer")
+    assert skill["properties"]["runtime"]["argument_bindings"]["outputs"]["artifact:table"] == {
+        "parameter": "csv_output", "flag": "--csv-output"
+    }
+
+
+def test_import_derives_dependency_artifacts_and_reference_edge(tmp_path):
+    skills = [
+        {"id": "producer", "source_dir": str(tmp_path), "entrypoints": [],
+         "outputs": [{"name": "artifact:report", "path": "outputs/report.json"}], "enabled": False},
+        {"id": "consumer", "source_dir": str(tmp_path), "entrypoints": [],
+         "outputs": [], "dependencies": ["producer"], "enabled": False},
+    ]
+    cache = Path(receive_bundle(bundle(tmp_path, skills=skills), tmp_path)["output_dir"])
+    graph = read_graph(cache)
+    consumer = next(x["entity"] for x in graph if x.get("entity", {}).get("id") == "skill:consumer")
+    assert consumer["properties"]["runtime"]["inputs"] == ["artifact:report"]
+    assert any(x.get("relation", {}).get("relation") == "precedes" for x in graph)
+
+
+def test_import_derives_input_from_an_explicit_documented_skill_reference(tmp_path):
+    skills = [
+        {"id": "producer", "source_dir": str(tmp_path), "entrypoints": [],
+         "outputs": [{"name": "artifact:report", "path": "outputs/report.json"}], "enabled": False},
+        {"id": "consumer", "source_dir": str(tmp_path), "entrypoints": [], "outputs": [], "enabled": False,
+         "documentation": {"input_hints": ["producer JSON"], "related_skill_refs": []}},
+    ]
+    cache = Path(receive_bundle(bundle(tmp_path, skills=skills), tmp_path)["output_dir"])
+    graph = read_graph(cache)
+    consumer = next(x["entity"] for x in graph if x.get("entity", {}).get("id") == "skill:consumer")
+    assert consumer["properties"]["runtime"]["inputs"] == ["artifact:report"]
+    assert any(x.get("relation", {}).get("relation") == "precedes" for x in graph)
+
+
+def test_import_writes_each_entity_id_once_and_manifest_counts_unique_entities(tmp_path):
+    skills = [
+        {"id": "one", "source_dir": str(tmp_path), "entrypoints": [], "outputs": ["artifact:report"], "enabled": False},
+        {"id": "two", "source_dir": str(tmp_path), "entrypoints": [], "outputs": ["artifact:report"], "enabled": False},
+    ]
+    cache = Path(receive_bundle(bundle(tmp_path, skills=skills), tmp_path)["output_dir"])
+    graph = read_graph(cache)
+    entity_ids = [record["entity"]["id"] for record in graph if "entity" in record]
+    manifest = json.loads((cache / "cache-manifest.json").read_text(encoding="utf-8"))
+    assert len(entity_ids) == len(set(entity_ids))
+    assert manifest["entity_count"] == len(entity_ids)

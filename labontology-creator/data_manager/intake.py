@@ -53,6 +53,13 @@ def _normalise_outputs(value: Any) -> dict[str, Any]:
             result[_artifact_id(item)] = None
     return result
 
+def _skill_outputs(skill: dict[str, Any]) -> dict[str, Any]:
+    """Keep named outputs; discard a generic fallback when a concrete output exists."""
+    outputs = _normalise_outputs(skill.get("outputs"))
+    if len(outputs) > 1:
+        outputs.pop("artifact:result", None)
+    return outputs
+
 def _source_record(path: Path, roles: list[str], skill_id: str | None = None, note: str | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {"path": str(path.resolve()), "roles": sorted(set(roles)), "sha256": _sha256(path)}
     if skill_id:
@@ -61,7 +68,7 @@ def _source_record(path: Path, roles: list[str], skill_id: str | None = None, no
         result["note"] = note
     return result
 
-def _runtime(skill: dict[str, Any]) -> dict[str, Any]:
+def _runtime(skill: dict[str, Any], inferred_inputs: list[str] | None = None) -> dict[str, Any]:
     skill_id = _skill_id(skill)
     entrypoints = [Path(str(item)) for item in _as_list(skill.get("entrypoints"))]
     entrypoint = next((item for item in entrypoints if item.exists()), entrypoints[0] if entrypoints else None)
@@ -70,8 +77,8 @@ def _runtime(skill: dict[str, Any]) -> dict[str, Any]:
         command = ["python", entrypoint.relative_to(source_dir).as_posix()]
     else:
         command = ["python", str(entrypoint)] if entrypoint else []
-    inputs = [_artifact_id(item) for item in _as_list(skill.get("inputs"))]
-    outputs = _normalise_outputs(skill.get("outputs"))
+    inputs = list(dict.fromkeys([_artifact_id(item) for item in _as_list(skill.get("inputs"))] + list(inferred_inputs or [])))
+    outputs = _skill_outputs(skill)
     bindings: dict[str, dict[str, Any]] = {"inputs": {}, "outputs": {}}
     for parameter in _as_list(skill.get("parameters")):
         if not isinstance(parameter, dict) or not parameter.get("name"):
@@ -85,6 +92,30 @@ def _runtime(skill: dict[str, Any]) -> dict[str, Any]:
         for artifact in outputs:
             if _safe_name(artifact.removeprefix("artifact:")) == normalized:
                 bindings["outputs"][artifact] = binding
+    output_parameters = [item for item in _as_list(skill.get("parameters"))
+                         if isinstance(item, dict) and item.get("name")
+                         and re.search(r"(?:^|_)(?:output|result)(?:_|$)", str(item["name"]), re.I)]
+    for parameter in output_parameters:
+        name = str(parameter["name"])
+        formats = [value for value in ("csv", "json", "yaml", "yml", "md", "txt") if value in name.lower()]
+        if not formats:
+            continue
+        for artifact, location in outputs.items():
+            if artifact in bindings["outputs"] or not any(value in str(location).lower() for value in formats):
+                continue
+            bindings["outputs"][artifact] = (
+                {"parameter": name, "positional": True} if parameter.get("positional")
+                else {"parameter": name, "flag": "--" + name.replace("_", "-")}
+            )
+            break
+    unbound_outputs = [artifact for artifact in outputs if artifact not in bindings["outputs"]]
+    if len(unbound_outputs) == 1 and len(output_parameters) == 1:
+        parameter = output_parameters[0]
+        name = str(parameter["name"])
+        bindings["outputs"][unbound_outputs[0]] = (
+            {"parameter": name, "positional": True} if parameter.get("positional")
+            else {"parameter": name, "flag": "--" + name.replace("_", "-")}
+        )
     return {"id": skill_id, "name": str(skill.get("name") or skill_id), "command": command,
             "fixed_arguments": _as_list(skill.get("fixed_arguments")), "inputs": inputs, "outputs": outputs,
             "parameters": [item for item in _as_list(skill.get("parameters")) if isinstance(item, dict)],
@@ -101,11 +132,15 @@ def _relation(relation_type: str, source: str, target: str) -> dict[str, Any]:
     key = hashlib.sha256(f"{relation_type}|{source}|{target}".encode()).hexdigest()[:12]
     return {"relation": {"id": f"rel:{relation_type}:{key}", "relation": relation_type, "source": source, "target": target}}
 
-def _workflow_records(skills: list[dict[str, Any]], workflows: list[dict[str, Any]], suite_id: str) -> list[dict[str, Any]]:
+def _workflow_records(skills: list[dict[str, Any]], workflows: list[dict[str, Any]], suite_id: str,
+                      dependencies: dict[str, list[str]] | None = None) -> list[dict[str, Any]]:
     """Store workflow knowledge as a reference, never as a scheduler instruction."""
     known = {_skill_id(skill) for skill in skills}
     if not workflows:
-        workflows = [{"id": f"flow:{_safe_name(suite_id)}", "nodes": [{"id": name, "skill": name} for name in sorted(known)], "inferred": True}]
+        workflows = [{"id": f"flow:{_safe_name(suite_id)}", "nodes": [
+            {"id": _skill_id(skill), "skill": _skill_id(skill), "depends_on": (dependencies or {}).get(_skill_id(skill), _as_list(skill.get("dependencies")))}
+            for skill in sorted(skills, key=_skill_id)
+        ], "inferred": True}]
     records: list[dict[str, Any]] = []
     for workflow in workflows:
         flow_id = str(workflow.get("id") or f"flow:{_safe_name(suite_id)}")
@@ -130,9 +165,24 @@ def _graph_records(bundle: dict[str, Any]) -> tuple[list[dict[str, Any]], list[d
     suite_id = str(bundle["suite_id"])
     records: list[dict[str, Any]] = [_entity(suite_id, "SkillSuite", {"name": suite_id, "skill_count": len(skills), "status": "maintained"})]
     sources: list[dict[str, Any]] = []
+    outputs_by_skill = {_skill_id(skill): _skill_outputs(skill) for skill in skills}
+    known_skill_ids = set(outputs_by_skill)
+    dependency_map: dict[str, list[str]] = {}
+    for skill in skills:
+        documentation = skill.get("documentation") if isinstance(skill.get("documentation"), dict) else {}
+        references = [str(item) for item in _as_list(skill.get("dependencies"))]
+        references.extend(str(item) for item in _as_list(documentation.get("related_skill_refs")))
+        input_text = "\n".join(str(item).lower() for item in _as_list(documentation.get("input_hints")))
+        for candidate in known_skill_ids:
+            forms = {candidate.lower(), candidate.lower().replace("-", " "), candidate.lower().replace("-", "_")}
+            if any(form in input_text for form in forms):
+                references.append(candidate)
+        dependency_map[_skill_id(skill)] = list(dict.fromkeys(item for item in references if item in known_skill_ids and item != _skill_id(skill)))
     for skill in skills:
         skill_id = _skill_id(skill)
-        runtime = _runtime(skill)
+        dependency_inputs = [artifact for dependency in dependency_map[skill_id]
+                             for artifact in outputs_by_skill.get(str(dependency), {})]
+        runtime = _runtime(skill, dependency_inputs)
         properties = {"name": str(skill.get("name") or skill_id), "description": skill.get("description"), "status": str(skill.get("status") or "draft"), "validated": bool(skill.get("validated", False)), "enabled": bool(skill.get("enabled", False)), "execution_mode": runtime["execution_mode"], "runnable": runtime["runnable"], "side_effect_level": runtime["side_effect_level"], "required_capabilities": runtime["required_capabilities"], "entrypoints": [str(item) for item in _as_list(skill.get("entrypoints"))], "unresolved": _as_list(skill.get("unresolved")), "runtime": runtime}
         for key in ("documentation", "knowledge_files", "capability_evidence", "recommended_next_skills", "output_mode", "decision_policy"):
             if skill.get(key) not in ({}, [], None):
@@ -161,7 +211,7 @@ def _graph_records(bundle: dict[str, Any]) -> tuple[list[dict[str, Any]], list[d
                 path = source_dir / str(item["path"])
                 if path.exists():
                     sources.append(_source_record(path, ["knowledge"], skill_id))
-    workflow_records = _workflow_records(skills, [item for item in _as_list(bundle.get("workflows")) if isinstance(item, dict)], suite_id)
+    workflow_records = _workflow_records(skills, [item for item in _as_list(bundle.get("workflows")) if isinstance(item, dict)], suite_id, dependency_map)
     records.extend(workflow_records)
     for record in workflow_records:
         entity = record.get("entity", {})
@@ -180,7 +230,20 @@ def _graph_records(bundle: dict[str, Any]) -> tuple[list[dict[str, Any]], list[d
             existing["roles"] = sorted(set(existing["roles"]) | set(item["roles"]))
         else:
             merged[item["path"]] = item
-    return records, list(merged.values())
+    entities: dict[str, dict[str, Any]] = {}
+    relations: dict[str, dict[str, Any]] = {}
+    for record in records:
+        if "entity" in record:
+            entity = record["entity"]
+            previous = entities.get(entity["id"])
+            if previous is None:
+                entities[entity["id"]] = entity
+            else:
+                previous["properties"].update({key: value for key, value in entity.get("properties", {}).items() if value not in (None, [], {})})
+        else:
+            relation = record["relation"]
+            relations.setdefault(relation["id"], relation)
+    return ([{"entity": entity} for entity in entities.values()] + [{"relation": relation} for relation in relations.values()], list(merged.values()))
 
 def _write_compact_cache(cache: Path, bundle: dict[str, Any]) -> None:
     staging = cache.parent / f".{cache.name}-graph-build"
@@ -227,6 +290,11 @@ def maintain_cache(cache_dir: Path, source: Path, *, kind: str = "knowledge", sk
     index = json.loads(index_path.read_text(encoding="utf-8"))
     index["sources"] = [item for item in index.get("sources", []) if item.get("path") != str(source)] + [_source_record(source, [role], skill_id, note)]
     index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    manifest_path = cache / "cache-manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["updated_at"] = _now()
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if skill_id:
         graph = [json.loads(line) for line in graph_path.read_text(encoding="utf-8").splitlines() if line.strip()]
         for record in graph:

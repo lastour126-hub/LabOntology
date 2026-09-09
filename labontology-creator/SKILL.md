@@ -28,7 +28,7 @@ labontology_<suite>_skill_cache/
 └── runs/
 ```
 
-`ontology.jsonl` is the canonical normalized graph. It contains `SkillSuite`, `Skill`, `SkillContract`, `ArtifactType`, `Capability`, optional `SkillFlow`/`FlowNode`, policies, evidence summaries and runtime bindings. `source-index.json` contains external source paths and hashes; source `SKILL.md`, KB files and scripts remain in their original package directories. `runs/` belongs to Runtime and is never imported knowledge.
+`ontology.jsonl` is the canonical normalized graph. It contains `SkillSuite`, `Skill`, `SkillContract`, `ArtifactType`, optional `SkillFlow`/`FlowNode`, evidence summaries and runtime bindings. `source-index.json` contains external source paths and hashes; source `SKILL.md`, KB files and scripts remain in their original package directories. `runs/` belongs to Runtime and is never imported knowledge.
 
 Do not create or restore `Skills/`, `Graph/`, `Workflow/`, or `DeviceKnowledge/` directories. They were a previous derived layout and are not supported by current cache maintenance.
 
@@ -47,7 +47,7 @@ python scripts/update_cache.py --cache-dir <cache-dir> --source <knowledge-file>
 
 Creator owns importing and canonical graph maintenance. Runtime owns mission decisions, Skill invocation and `runs/` records. Creator does not plan a mission, invoke a Skill, connect a device, or treat an entrypoint as execution authorization. Runtime does not rewrite the canonical graph during a run.
 
-Unknown or ambiguous information goes into `unresolved` with evidence and confidence. A discovered command is not automatically enabled. Source hashes allow Runtime/Creator to identify stale evidence after a package changes. Persistent source updates remain auditable and do not fabricate missing values.
+Unknown or ambiguous information goes into `unresolved` with evidence and confidence. A discovered command is not automatically enabled. Source hashes keep persistent source updates auditable and do not fabricate missing values.
 
 ## Output
 

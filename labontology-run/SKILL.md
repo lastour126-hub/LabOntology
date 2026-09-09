@@ -30,7 +30,7 @@ Use `request_human` for a question or a Skill decision assessment for an action.
 
 ## Completion, failure and recovery
 
-Agent Skills may complete without output files. Use `resume --agent-completed` for a successful zero-output action, `--summary` and `--evidence` for textual results, and `--agent-failed --summary` for failure. Declared output files must exist; never fabricate placeholders. Process failure, timeout or stale source hashes become observations and do not trigger blind retries.
+Agent Skills may complete without output files. Use `resume --agent-completed` for a successful zero-output action, `--summary` and `--evidence` for textual results, and `--agent-failed --summary` for failure. Declared output files must exist; never fabricate placeholders. Process failure or timeout becomes an observation and does not trigger a blind retry.
 
 Context exposes `retry_candidates` only for failed read-only process actions explicitly marked retryable and still below their retry limit. The host Agent may retry one by submitting a normal `skill` decision with `"retry_of": "action:N"`; Runtime never creates a retry itself.
 
