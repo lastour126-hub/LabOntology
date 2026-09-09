@@ -131,25 +131,28 @@ def _runtime(skill: dict[str, Any], inferred_inputs: list[str] | None = None) ->
         command = ["python", str(entrypoint)] if entrypoint else []
     inputs = list(dict.fromkeys([_artifact_id(item) for item in _as_list(skill.get("inputs"))] + list(inferred_inputs or [])))
     outputs = _skill_outputs(skill)
-    bindings: dict[str, dict[str, Any]] = {"inputs": {}, "outputs": {
+    bindings: dict[str, dict[str, Any]] = {"inputs": {}, "parameters": {}, "outputs": {
         artifact: binding for artifact, binding in _explicit_output_bindings(skill.get("outputs")).items()
         if artifact in outputs
     }}
+    output_parameters = [item for item in _as_list(skill.get("parameters"))
+                         if isinstance(item, dict) and item.get("name")
+                         and re.search(r"(?:^|_)(?:output|result)(?:_|$)", str(item["name"]), re.I)]
+    output_parameter_names = {str(item["name"]) for item in output_parameters}
     for parameter in _as_list(skill.get("parameters")):
         if not isinstance(parameter, dict) or not parameter.get("name"):
             continue
         name = str(parameter["name"])
         binding = {"parameter": name, "positional": True} if parameter.get("positional") else {"parameter": name, "flag": "--" + name.replace("_", "-")}
         normalized = _safe_name(name)
+        if name not in output_parameter_names:
+            bindings["parameters"][name] = binding
         for artifact in inputs:
-            if artifact not in bindings["outputs"] and _safe_name(artifact.removeprefix("artifact:")) == normalized:
+            if artifact not in bindings["inputs"] and _safe_name(artifact.removeprefix("artifact:")) == normalized:
                 bindings["inputs"][artifact] = binding
         for artifact in outputs:
             if artifact not in bindings["outputs"] and _safe_name(artifact.removeprefix("artifact:")) == normalized:
                 bindings["outputs"][artifact] = binding
-    output_parameters = [item for item in _as_list(skill.get("parameters"))
-                         if isinstance(item, dict) and item.get("name")
-                         and re.search(r"(?:^|_)(?:output|result)(?:_|$)", str(item["name"]), re.I)]
     for parameter in output_parameters:
         name = str(parameter["name"])
         formats = [value for value in ("csv", "json", "yaml", "yml", "md", "txt") if value in name.lower()]

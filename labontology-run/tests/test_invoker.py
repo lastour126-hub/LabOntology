@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 
 from runtime.invoker import SkillInvoker
 from runtime.models import SkillSpec
@@ -18,6 +19,21 @@ def test_invoker_runs_skill_and_collects_declared_output(tmp_path):
     assert (tmp_path / "result.txt").read_text(encoding="utf-8") == "ok"
     assert (tmp_path / "stdout.log").exists()
     assert (tmp_path / "stderr.log").exists()
+
+
+def test_invoker_renders_documented_timestamp_output_templates(tmp_path):
+    skill = SkillSpec(
+        id="skill:timestamped-writer",
+        command=[sys.executable, "-c", "from pathlib import Path; import os; Path(os.environ['SKILL_OUTPUT_RESULT']).write_text('ok')"],
+        outputs={"artifact:result": "output/result_<timestamp>.json"},
+    )
+
+    run = SkillInvoker().run(skill, tmp_path / "run")
+
+    output = Path(run.outputs["artifact:result"])
+    assert run.status == "succeeded"
+    assert "<" not in output.name
+    assert output.read_text(encoding="utf-8") == "ok"
 
 
 def test_invoker_binds_input_and_output_artifacts_to_cli_arguments(tmp_path):
@@ -41,6 +57,27 @@ def test_invoker_binds_input_and_output_artifacts_to_cli_arguments(tmp_path):
 
     assert run.status == "succeeded"
     assert (tmp_path / "run" / "result.txt").read_text(encoding="utf-8") == "input-ok"
+
+
+def test_invoker_binds_declared_decision_arguments_to_cli_parameters(tmp_path):
+    skill = SkillSpec(
+        id="skill:arguments",
+        command=[
+            sys.executable,
+            "-c",
+            "import argparse; from pathlib import Path; p=argparse.ArgumentParser(); p.add_argument('--text'); p.add_argument('--test', action='store_true'); p.add_argument('--output'); a=p.parse_args(); Path(a.output).write_text(a.text + ':' + str(a.test))",
+        ],
+        outputs={"artifact:result": "result.txt"},
+        argument_bindings={
+            "parameters": {"text": {"flag": "--text"}, "test": {"flag": "--test"}},
+            "outputs": {"artifact:result": {"flag": "--output"}},
+        },
+    )
+
+    run = SkillInvoker().run(skill, tmp_path / "run", arguments={"text": "verified", "test": True})
+
+    assert run.status == "succeeded"
+    assert (tmp_path / "run" / "result.txt").read_text(encoding="utf-8") == "verified:True"
 
 
 def test_invoker_resolves_run_directory_values_for_required_auxiliary_arguments(tmp_path):

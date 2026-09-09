@@ -16,7 +16,7 @@ Use the active suite cache's `cache-manifest.json`, `ontology.jsonl` and `source
 1. Parse the user goal, success conditions, constraints and existing authorization.
 2. Run `context` to inspect every registered candidate Skill and the current mission observations. Treat workflow edges as suggestions, not a required order.
 3. Decide which one Skill most reduces the current information or execution gap. Prefer a knowledge or verification Skill before an uncertain device action.
-4. Submit one decision with `act`. Include a reason and action assessment: `impact` (`routine` or `significant`), rationale, uncertainty list and authenticity-gap list. For a process Skill whose context includes `instruction_source`, first read that current `SKILL.md` and include its path and SHA-256 as `reviewed_instruction`; Agent-mode Skills do not need this receipt.
+4. Submit one decision with `act`. Include a reason and action assessment: `impact` (`routine` or `significant`), rationale, uncertainty list and authenticity-gap list. Use `inputs` for declared artifact paths and `arguments` only for parameter names exposed in the selected Skill's `argument_bindings.parameters`; Runtime maps them to its fixed CLI flags. For a process Skill whose context includes `instruction_source`, first read that current `SKILL.md` and include its path and SHA-256 as `reviewed_instruction`; Agent-mode Skills do not need this receipt.
 5. Inspect output, logs, evidence and source hashes. A successful process is not scientific validation; determine whether its result satisfies the current objective.
 6. Return to decision-making after every result. Skills can be repeated, skipped, reordered or replaced. Submit `complete` only when evidence supports the user's success conditions.
 

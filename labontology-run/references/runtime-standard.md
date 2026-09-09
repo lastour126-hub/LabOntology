@@ -37,7 +37,16 @@ Choose one Skill:
 }
 ```
 
-Optional `inputs` maps artifact IDs to existing local paths. Required inputs and available capabilities are checked for both process and Agent Skills. Report actually established capabilities using `--capability ID`; do not invent them to bypass a block.
+Optional `inputs` maps artifact IDs to existing local paths. Optional `arguments` supplies scalar values only for parameter names exposed by the selected Skill's `argument_bindings.parameters` in context. Runtime maps those names to the declared fixed flags or positional arguments; it rejects unknown argument names and never accepts raw command fragments. Required inputs and available capabilities are checked for both process and Agent Skills. Report actually established capabilities using `--capability ID`; do not invent them to bypass a block.
+
+For example, a parser that exposes `text`, `table_file`, and `test` may receive:
+
+```json
+"arguments": {
+  "text": "ATA reaction optimization",
+  "table_file": "C:/data/chemical_space.xlsx"
+}
+```
 
 ### Skill document review
 

@@ -129,6 +129,7 @@ class AgentRuntime:
             if "authorization" in assessment and not isinstance(assessment["authorization"], str):
                 raise ValueError("Existing authorization must cite the user's instruction")
             action["inputs"] = _artifact_paths(action.get("inputs", {}))
+            action["arguments"] = self._decision_arguments(action, self.skills[action["skill_id"]])
             instruction_error = self._instruction_error(action, self.skills[action["skill_id"]])
             if instruction_error:
                 raise ValueError(instruction_error)
@@ -183,6 +184,19 @@ class AgentRuntime:
         if skill.execution_mode != "agent" and (not skill.runnable or not skill.command):
             return "Skill has no runnable process command"
         return None
+
+    def _decision_arguments(self, action: dict[str, Any], skill: SkillSpec) -> dict[str, Any]:
+        arguments = action.get("arguments", {})
+        if not isinstance(arguments, dict):
+            raise ValueError("Decision arguments must be an object")
+        bindings = skill.argument_bindings if isinstance(skill.argument_bindings, dict) else {}
+        declared = bindings.get("parameters", {}) if isinstance(bindings.get("parameters", {}), dict) else {}
+        unknown = sorted(set(arguments) - set(declared))
+        if unknown:
+            raise ValueError(f"Unknown declared argument(s) for {skill.id}: {unknown}")
+        if not all(isinstance(value, (str, int, float, bool)) for value in arguments.values()):
+            raise ValueError("Decision argument values must be strings, numbers, or booleans")
+        return arguments
 
     def _instruction_error(self, action: dict[str, Any], skill: SkillSpec) -> str | None:
         if skill.execution_mode == "agent":
@@ -259,7 +273,8 @@ class AgentRuntime:
                                                       "retry_count": action["retry_count"]})
         self.store.event("skill_started", {"action": action["id"], "skill": skill.id})
         try:
-            result = self.invoker.run(skill, run_dir, {a: state.artifacts[a] for a in skill.input_artifacts})
+            result = self.invoker.run(skill, run_dir, {a: state.artifacts[a] for a in skill.input_artifacts},
+                                      action.get("arguments", {}))
         except OSError as exc:
             result = SkillExecution(action["id"], skill.id, "failed", error=str(exc),
                                     failure_kind="launch_error",

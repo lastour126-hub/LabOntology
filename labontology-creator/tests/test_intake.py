@@ -117,6 +117,25 @@ def test_import_binds_a_single_declared_output_to_output_parameter(tmp_path):
     }
 
 
+def test_import_exposes_non_output_parameters_as_runtime_argument_bindings(tmp_path):
+    cache = Path(receive_bundle(bundle(tmp_path, skills=[{
+        "id": "parser", "source_dir": str(tmp_path), "entrypoints": [],
+        "parameters": [
+            {"name": "text", "required": True},
+            {"name": "table_file", "required": True},
+            {"name": "test", "default": False},
+            {"name": "output", "required": True},
+        ],
+        "outputs": [{"name": "artifact:parsed", "path": "outputs/parsed.json"}], "enabled": False,
+    }]), tmp_path)["output_dir"])
+    skill = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("id") == "skill:parser")
+    assert skill["properties"]["runtime"]["argument_bindings"]["parameters"] == {
+        "text": {"parameter": "text", "flag": "--text"},
+        "table_file": {"parameter": "table_file", "flag": "--table-file"},
+        "test": {"parameter": "test", "flag": "--test"},
+    }
+
+
 def test_import_binds_format_specific_output_parameter(tmp_path):
     cache = Path(receive_bundle(bundle(tmp_path, skills=[{
         "id": "writer", "source_dir": str(tmp_path), "entrypoints": [],

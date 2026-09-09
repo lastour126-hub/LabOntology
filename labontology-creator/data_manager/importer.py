@@ -287,7 +287,7 @@ def _merge_parameters(manifest: dict[str, Any], discovered: list[dict[str, Any]]
         if isinstance(item, str):
             parameters.append({"name": item, "required": None, "default": None})
         elif isinstance(item, dict) and item.get("name"):
-            parameters.append({"name": item["name"], "required": item.get("required"), "default": item.get("default")})
+            parameters.append({**item, "name": item["name"], "required": item.get("required"), "default": item.get("default")})
     seen = {item["name"] for item in parameters}
     parameters.extend(item for item in discovered if item["name"] not in seen)
     return parameters

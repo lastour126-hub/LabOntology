@@ -53,6 +53,22 @@ def test_process_runs_one_chosen_action_without_a_flow(tmp_path):
     assert set(s["id"] for s in runtime.context()["skills"]) == {"knowledge", "device"}
 
 
+def test_process_passes_declared_decision_arguments_to_the_skill(tmp_path):
+    skill = SkillSpec(
+        "script",
+        [sys.executable, "-c", "import argparse; p=argparse.ArgumentParser(); p.add_argument('--text'); a=p.parse_args(); print(a.text)"],
+        argument_bindings={"parameters": {"text": {"flag": "--text"}}},
+    )
+    runtime = controller(tmp_path, [skill])
+    runtime.start("Run local script")
+
+    state = runtime.decide({**choose("script"), "arguments": {"text": "from-decision"}})
+
+    assert "from-decision" in state.observations[-1]["stdout"]
+    with pytest.raises(ValueError, match="Unknown declared argument"):
+        runtime.decide({**choose("script"), "arguments": {"unknown": "value"}})
+
+
 def test_process_skill_requires_current_skill_document_review(tmp_path):
     document = tmp_path / "SKILL.md"
     document.write_text("Do not guess output paths.", encoding="utf-8")

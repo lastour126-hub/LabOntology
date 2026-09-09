@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from .models import SkillExecution, SkillSpec
 
@@ -12,16 +14,29 @@ def _env_key(artifact_id: str) -> str:
     return "SKILL_OUTPUT_" + re.sub(r"[^A-Za-z0-9]+", "_", artifact_id.split(":", 1)[-1]).upper()
 
 
-def _append_binding(command: list[str], binding: object, value: str, run_dir: Path | None = None) -> None:
+def _render_output_template(value: str) -> str:
+    now = datetime.now()
+    return (value.replace("<YYYYMMDD_HHMMSS>", now.strftime("%Y%m%d_%H%M%S"))
+                 .replace("<YYYYMMDD>", now.strftime("%Y%m%d"))
+                 .replace("<timestamp>", now.strftime("%Y%m%d_%H%M%S"))
+                 .replace("<time>", now.strftime("%Y%m%d_%H%M%S")))
+
+
+def _append_binding(command: list[str], binding: object, value: Any, run_dir: Path | None = None) -> None:
     if not isinstance(binding, dict):
         return
-    resolved_value = str(binding.get("value", value))
+    resolved_value = binding.get("value", value)
+    flag = binding.get("flag")
+    if isinstance(resolved_value, bool):
+        if resolved_value and flag:
+            command.append(str(flag))
+        return
+    resolved_value = str(resolved_value)
     if run_dir is not None:
         resolved_value = resolved_value.replace("${RUN_DIR}", str(run_dir))
     if binding.get("positional"):
         command.append(resolved_value)
         return
-    flag = binding.get("flag")
     if flag:
         command.extend([str(flag), resolved_value])
     for additional in binding.get("additional_flags", []) or []:
@@ -29,7 +44,8 @@ def _append_binding(command: list[str], binding: object, value: str, run_dir: Pa
 
 
 class SkillInvoker:
-    def run(self, skill: SkillSpec, run_dir: Path, inputs: dict[str, str] | None = None) -> SkillExecution:
+    def run(self, skill: SkillSpec, run_dir: Path, inputs: dict[str, str] | None = None,
+            arguments: dict[str, Any] | None = None) -> SkillExecution:
         run_dir = run_dir.resolve()
         run_dir.mkdir(parents=True, exist_ok=True)
         environment = os.environ.copy()
@@ -39,7 +55,7 @@ class SkillInvoker:
             environment["SKILL_INPUT_" + _env_key(artifact_id).removeprefix("SKILL_OUTPUT_")] = str(path)
         output_paths = {}
         for artifact_id, relative_path in skill.outputs.items():
-            rendered = str(relative_path).replace("${RUN_DIR}", str(run_dir))
+            rendered = _render_output_template(str(relative_path)).replace("${RUN_DIR}", str(run_dir))
             path = Path(rendered)
             if not path.is_absolute():
                 path = run_dir / path
@@ -51,6 +67,9 @@ class SkillInvoker:
         for artifact_id, binding in (bindings.get("inputs", {}) or {}).items():
             if artifact_id in (inputs or {}):
                 _append_binding(command, binding, str(inputs[artifact_id]), run_dir)
+        for parameter, binding in (bindings.get("parameters", {}) or {}).items():
+            if parameter in (arguments or {}):
+                _append_binding(command, binding, arguments[parameter], run_dir)
         for artifact_id, binding in (bindings.get("outputs", {}) or {}).items():
             if artifact_id in output_paths:
                 _append_binding(command, binding, output_paths[artifact_id], run_dir)
