@@ -63,6 +63,90 @@ def inspect_cache(cache_dir: Path) -> dict[str, Any]:
     }
 
 
+def _cache_roots(skill_root: Path, workspace: Path) -> list[Path]:
+    roots = [workspace, workspace / "output", skill_root, skill_root.parent]
+    unique: list[Path] = []
+    for root in roots:
+        resolved = root.resolve()
+        if resolved not in unique:
+            unique.append(resolved)
+    return unique
+
+
+def _cache_candidates(skill_root: Path, workspace: Path) -> list[Path]:
+    candidates: list[Path] = []
+    for root in _cache_roots(skill_root, workspace):
+        if not root.is_dir():
+            continue
+        for candidate in root.glob("labontology_*_skill_cache"):
+            resolved = candidate.resolve()
+            if resolved.is_dir() and resolved not in candidates:
+                candidates.append(resolved)
+    return candidates
+
+
+def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dict[str, Any] | None:
+    manifest_path = cache_dir / "cache-manifest.json"
+    graph_path = cache_dir / "ontology.jsonl"
+    index_path = cache_dir / "source-index.json"
+    if not (manifest_path.is_file() and graph_path.is_file() and index_path.is_file()):
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    if manifest.get("schema") != "labontology.graph-cache.v1":
+        return None
+    if suite_id and manifest.get("suite_id") != suite_id:
+        return None
+    sources = index.get("sources", [])
+    if not isinstance(sources, list):
+        return None
+    matched_sources = 0
+    missing_sources = 0
+    for record in sources:
+        if not isinstance(record, dict) or not record.get("path"):
+            continue
+        source = Path(str(record["path"])).resolve()
+        if not source.is_file():
+            missing_sources += 1
+        if source.is_relative_to(skill_root):
+            matched_sources += 1
+    if not matched_sources or missing_sources:
+        return None
+    validation_output = io.StringIO()
+    with contextlib.redirect_stdout(validation_output):
+        if ONTOLOGY.validate(system_dir=cache_dir) != 0:
+            return None
+    return {
+        "cache_dir": str(cache_dir),
+        "suite_id": manifest["suite_id"],
+        "updated_at": str(manifest.get("updated_at", "")),
+        "matched_sources": matched_sources,
+        "source_integrity": {"records": len(sources), "missing": missing_sources},
+    }
+
+
+def resolve_cache(skill_root: Path, workspace: Path, suite_id: str | None = None) -> dict[str, Any]:
+    skill_root, workspace = skill_root.resolve(), workspace.resolve()
+    if not skill_root.is_dir():
+        raise ValueError(f"Skill root is unavailable: {skill_root}")
+    matches = [match for candidate in _cache_candidates(skill_root, workspace)
+               if (match := _cache_match(candidate, skill_root, suite_id))]
+    if not matches:
+        scope = f" for {suite_id}" if suite_id else ""
+        raise ValueError(f"No valid existing cache matches {skill_root}{scope}")
+    selected = max(matches, key=lambda match: (match["updated_at"], match["cache_dir"]))
+    return {
+        "cache_dir": selected["cache_dir"],
+        "suite_id": selected["suite_id"],
+        "candidate_count": len(matches),
+        "matched_sources": selected["matched_sources"],
+        "source_integrity": selected["source_integrity"],
+    }
+
+
 def _runtime_result(arguments: list[str]) -> dict[str, Any]:
     rendered = io.StringIO()
     with contextlib.redirect_stdout(rendered):
@@ -148,6 +232,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     import_parser.add_argument("skill_root", type=Path)
     import_parser.add_argument("--suite-id", required=True)
     import_parser.add_argument("--workspace", type=Path, default=Path.cwd())
+    resolve_parser = subparsers.add_parser("resolve-cache", help="Find a valid existing cache for a Skill directory")
+    resolve_parser.add_argument("--skill-root", type=Path, required=True)
+    resolve_parser.add_argument("--workspace", type=Path, default=Path.cwd())
+    resolve_parser.add_argument("--suite-id")
     inspect_parser = subparsers.add_parser("inspect", help="Summarize a compact cache")
     inspect_parser.add_argument("--cache-dir", type=Path, required=True)
     run_parser = subparsers.add_parser("run", help="Create an Agent-mode mission")
@@ -166,6 +254,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "import":
             result = import_suite(args.skill_root, args.suite_id, args.workspace)
+        elif args.command == "resolve-cache":
+            result = resolve_cache(args.skill_root, args.workspace, args.suite_id)
         elif args.command == "inspect":
             result = inspect_cache(args.cache_dir)
         elif args.command == "run":
