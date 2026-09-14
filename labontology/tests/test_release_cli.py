@@ -15,6 +15,7 @@ def run_cli(*args: str, check: bool = True, input: str | None = None) -> subproc
         [sys.executable, str(CLI), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         input=input,
         check=check,
     )
@@ -193,3 +194,16 @@ def test_release_skill_runs_without_repository_siblings(tmp_path: Path):
     )
 
     assert json.loads(started.stdout)["mission"]["status"] == "awaiting_decision"
+
+
+def test_public_entrypoint_emits_utf8_json_for_chinese_goal(tmp_path: Path):
+    cache = import_demo_cache(tmp_path)
+
+    completed = subprocess.run(
+        [sys.executable, str(CLI), "run", "--cache-dir", str(cache),
+         "--mission-id", "utf8", "--goal", "核实实验条件"],
+        capture_output=True,
+        check=True,
+    )
+
+    assert json.loads(completed.stdout.decode("utf-8"))["mission"]["goal"] == "核实实验条件"
