@@ -95,6 +95,22 @@ def test_inspect_reports_cache_summary(tmp_path: Path):
     assert result["source_integrity"]["missing"] == 0
 
 
+def test_resolve_cache_reuses_matching_valid_cache(tmp_path: Path):
+    source = make_skill_root(tmp_path)
+    imported = json.loads(run_cli(
+        "import", str(source), "--suite-id", "suite:demo", "--workspace", str(tmp_path),
+    ).stdout)
+
+    result = json.loads(run_cli(
+        "resolve-cache", "--skill-root", str(source), "--workspace", str(tmp_path),
+        "--suite-id", "suite:demo",
+    ).stdout)
+
+    assert result["cache_dir"] == imported["cache_dir"]
+    assert result["suite_id"] == "suite:demo"
+    assert result["candidate_count"] == 1
+
+
 def test_run_creates_mission_and_returns_context(tmp_path: Path):
     cache = import_demo_cache(tmp_path)
 
