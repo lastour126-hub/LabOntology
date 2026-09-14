@@ -17,4 +17,4 @@ Use `python scripts/labontology.py` from this directory as the release-facing en
 
 Internally, Creator owns discovery and canonical cache maintenance. Runtime owns mission state, approvals, execution, recovery, and evidence. Do not use this entrypoint to auto-execute device-facing or significant actions, fill missing evidence, or override Runtime policy.
 
-See `README.md` for the FDU Quick Start. For advanced maintenance, recovery, or Agent-directed decisions outside this entrypoint's routine read-only boundary, use the bundled `scripts/runtime.py` command; do not depend on archived Skills.
+See `README.md` for the FDU Quick Start. For advanced maintenance, recovery, or Agent-directed decisions outside this entrypoint's routine read-only boundary, use the bundled `scripts/runtime.py` command; do not depend on external historical Skills.

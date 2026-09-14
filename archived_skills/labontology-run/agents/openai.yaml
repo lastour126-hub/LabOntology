@@ -1,6 +1,0 @@
-interface:
-  display_name: "LabOntology Agent Runtime"
-  short_description: "Choose Skills, acquire evidence, act and replan laboratory tasks"
-  default_prompt: "Use $labontology-run to pursue the user's laboratory goal: inspect evidence, choose the next knowledge, analysis or device Skill, observe the result and replan. Treat workflows as references and request human decisions when the current context requires them."
-policy:
-  allow_implicit_invocation: true

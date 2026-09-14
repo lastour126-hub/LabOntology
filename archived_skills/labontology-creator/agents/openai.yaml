@@ -1,6 +1,0 @@
-interface:
-  display_name: "LabOntology Creator"
-  short_description: "Import and maintain structured LabOntology data"
-  default_prompt: "Use $labontology-creator to import, normalize, validate, or maintain LabOntology data from laboratory Skill packages and knowledge sources."
-policy:
-  allow_implicit_invocation: true

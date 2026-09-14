@@ -1,6 +1,0 @@
-kind: workflow_reference
-source: user_provided
-related_skills: [sample-preparation, liquid-transfer]
-condition: destination vessel is sealed
-rule: check the destination vessel seal before liquid transfer
-status: maintained

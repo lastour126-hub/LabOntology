@@ -19,5 +19,3 @@ def test_only_labontology_is_a_published_skill():
     assert (root / "labontology" / "SKILL.md").is_file()
     assert not (root / "labontology-creator").exists()
     assert not (root / "labontology-run").exists()
-    assert (root / "archived_skills" / "labontology-creator" / "SKILL.md").is_file()
-    assert (root / "archived_skills" / "labontology-run" / "SKILL.md").is_file()

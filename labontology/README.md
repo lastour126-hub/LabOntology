@@ -5,7 +5,7 @@
 - Creator discovers a Skill directory and maintains its graph cache.
 - Runtime owns mission state, evidence, execution, recovery, and approvals.
 
-The public entrypoint keeps those boundaries intact while providing a short path for normal use. It does not import the archived historical Skills.
+The public entrypoint keeps those boundaries intact while providing a short path for normal use. It does not import external historical Skills.
 
 ## FDU read-only example
 
