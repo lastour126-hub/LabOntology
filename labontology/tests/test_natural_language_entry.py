@@ -13,3 +13,10 @@ def test_skill_routes_natural_language_tasks_without_exposing_commands():
     assert "check readiness or progress" in normalized
     assert "maintain the workflow library" in normalized
     assert "request an action" in normalized
+
+
+def test_readme_explains_conversation_first_use():
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+
+    assert "## Use it in conversation" in readme
+    assert "The Agent selects the workflow internally" in readme

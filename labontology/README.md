@@ -7,6 +7,16 @@
 
 The public entrypoint keeps those boundaries intact while providing a short path for normal use. It does not import external historical Skills.
 
+## Use it in conversation
+
+Tell an Agent what you need to accomplish in ordinary laboratory language. For example:
+
+- "I am preparing a sample treatment experiment. What should I check first?"
+- "Before starting, are the materials and equipment for this procedure ready?"
+- "I paused this experiment yesterday. What is the current status and next step?"
+
+The Agent selects the workflow internally, checks the available procedures and task state, and asks only for missing information. It explains what is ready, what needs attention, and what can happen next. It does not start device actions without the required approval.
+
 ## Install
 
 Run these commands from this directory before using the Skill:
