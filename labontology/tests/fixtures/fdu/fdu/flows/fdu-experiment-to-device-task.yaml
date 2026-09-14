@@ -1,0 +1,14 @@
+id: "flow:fdu-experiment-to-device-task"
+name: "FDU experiment to device task"
+nodes:
+  - id: "flow-node:parse-request"
+    type: "skill_call"
+    skill: "skill:constraint-parser"
+    order: 1
+    outputs: ["artifact:constraint-json"]
+  - id: "flow-node:recommend-conditions"
+    type: "skill_call"
+    skill: "skill:literature-experiment-recommender"
+    order: 2
+    inputs: ["artifact:constraint-json"]
+    outputs: ["artifact:recommendation-table"]

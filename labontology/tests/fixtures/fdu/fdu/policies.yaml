@@ -1,0 +1,4 @@
+policies:
+  - id: "policy:fdu-device-submit-confirmation"
+    applies_to: ["skill:fdu-device-run"]
+    requires_confirmation: true
