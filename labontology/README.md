@@ -1,11 +1,11 @@
 # LabOntology Quick Start
 
-`labontology` is the release-facing entrypoint for the two underlying Skills:
+`labontology` is one self-contained Skill with two internal modules:
 
-- `labontology-creator` discovers a Skill directory and maintains its graph cache.
-- `labontology-run` owns mission state, evidence, execution, recovery, and approvals.
+- Creator discovers a Skill directory and maintains its graph cache.
+- Runtime owns mission state, evidence, execution, recovery, and approvals.
 
-The entrypoint keeps those boundaries intact while providing a short path for normal use.
+The public entrypoint keeps those boundaries intact while providing a short path for normal use. It does not import the archived historical Skills.
 
 ## FDU read-only example
 
@@ -30,4 +30,4 @@ python scripts/labontology.py decide --cache-dir <cache-dir> --mission-id <missi
 
 The command prints the Skill, impact, and reason, then requires a `y` or `yes` confirmation. It only accepts runnable, read-only process Skills with no required input artifacts or device capabilities. It also verifies the selected Skill's recorded `SKILL.md` hash before delegating the decision to Runtime.
 
-Device-facing or significant actions, missing inputs, missing evidence, unavailable instruction sources, and any request that needs scoped authorization stay in the existing Agent/Runtime approval path. Use `labontology-run` directly for those advanced decisions, recovery, `resume`, and `reconcile` operations.
+Device-facing or significant actions, missing inputs, missing evidence, unavailable instruction sources, and any request that needs scoped authorization stay in the internal Runtime approval path. Use `python scripts/runtime.py` for advanced `resume`, `reconcile`, and Agent-directed Runtime operations.

@@ -1,9 +1,7 @@
-# Keep this repository limited to the published LabOntology Skills.
+# Keep this repository limited to the published LabOntology Skill and archived history.
 *
 !.gitignore
-!labontology-creator/
-!labontology-creator/**
-!labontology-run/
-!labontology-run/**
 !labontology/
 !labontology/**
+!old_skills/
+!old_skills/**
