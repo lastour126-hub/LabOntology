@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -163,3 +165,31 @@ def test_fdu_quick_start_imports_and_starts_a_read_only_mission(tmp_path: Path):
     ).stdout)
 
     assert result["mission"]["status"] == "awaiting_decision"
+
+
+def test_release_skill_runs_without_repository_siblings(tmp_path: Path):
+    published = tmp_path / "published"
+    shutil.copytree(PROJECT_ROOT / "labontology", published)
+    source = make_skill_root(tmp_path)
+    command = [sys.executable, str(published / "scripts" / "labontology.py")]
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+
+    imported = subprocess.run(
+        [*command, "import", str(source), "--suite-id", "suite:isolated", "--workspace", str(tmp_path)],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    cache = Path(json.loads(imported.stdout)["cache_dir"])
+    started = subprocess.run(
+        [*command, "run", "--cache-dir", str(cache), "--goal", "inspect safely"],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert json.loads(started.stdout)["mission"]["status"] == "awaiting_decision"
