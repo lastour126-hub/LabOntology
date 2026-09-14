@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
-import importlib.util
 import io
 import json
 import sys
@@ -14,27 +13,11 @@ from uuid import uuid4
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-for component in (PROJECT_ROOT / "labontology-creator", PROJECT_ROOT / "labontology-run"):
-    if str(component) not in sys.path:
-        sys.path.insert(0, str(component))
-
-from data_manager.importer import export_bundle
-from data_manager.intake import receive_bundle
-from runtime import commands as runtime_commands
-from runtime.registry import Registry
-
-
-def _ontology_module():
-    path = PROJECT_ROOT / "labontology-run" / "scripts" / "ontology.py"
-    spec = importlib.util.spec_from_file_location("labontology_runtime_ontology", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Unable to load ontology helper: {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-ONTOLOGY = _ontology_module()
+from core import ontology as ONTOLOGY
+from core.creator.importer import export_bundle
+from core.creator.intake import receive_bundle
+from core.runtime import commands as runtime_commands
+from core.runtime.registry import Registry
 
 
 def import_suite(skill_root: Path, suite_id: str, workspace: Path) -> dict[str, Any]:
