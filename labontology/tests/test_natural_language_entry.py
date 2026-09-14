@@ -20,3 +20,12 @@ def test_readme_explains_conversation_first_use():
 
     assert "## Use it in conversation" in readme
     assert "The Agent selects the workflow internally" in readme
+
+
+def test_skill_requires_cache_resolution_before_importing():
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "resolve-cache" in skill
+    assert "Do not import when a valid matching cache is found" in skill
+    assert "explicitly asks to refresh, update, or reimport" in skill
+    assert "A task data file is not a reason to rebuild the workflow-library cache" in skill

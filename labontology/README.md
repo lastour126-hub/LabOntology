@@ -17,6 +17,16 @@ Tell an Agent what you need to accomplish in ordinary laboratory language. For e
 
 The Agent selects the workflow internally, checks the available procedures and task state, and asks only for missing information. It explains what is ready, what needs attention, and what can happen next. It does not start device actions without the required approval.
 
+## Cache-first execution
+
+When the workflow library has already been imported, the Agent resolves and reuses its valid cache before starting a new task. It imports again only when no matching cache exists or when you explicitly ask to refresh, update, or reimport the workflow library. A spreadsheet, sample description, or other task input does not by itself rebuild the workflow-library cache.
+
+For maintenance or troubleshooting, resolve an existing cache with:
+
+```powershell
+python scripts/labontology.py resolve-cache --skill-root ..\FduSkills --workspace .. --suite-id suite:fdu
+```
+
 ## Install
 
 Run these commands from this directory before using the Skill:
