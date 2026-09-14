@@ -47,4 +47,3 @@ def test_compact_cache_capabilities_are_available_to_agent_runtime(tmp_path):
         runs_dir=str(tmp_path / "runs"), mission_id="capability-test",
     ))
     assert runtime.capabilities == {"capability:measure"}
-

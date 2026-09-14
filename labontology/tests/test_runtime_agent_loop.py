@@ -379,4 +379,3 @@ def test_approval_cannot_execute_a_changed_skill_implementation(tmp_path):
     assert state.status == "awaiting_decision"
     assert not state.skill_executions
     assert "changed" in state.observations[-1]["summary"]
-

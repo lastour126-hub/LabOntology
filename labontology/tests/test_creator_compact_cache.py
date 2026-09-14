@@ -61,4 +61,3 @@ def test_compact_contract_keeps_only_interface_fields_and_omits_empty_decision_f
     skill = next(record["entity"] for record in graph if record.get("entity", {}).get("id") == "skill:lookup")
     assert "goal_types" not in skill["properties"]
     assert "failure_modes" not in skill["properties"]
-

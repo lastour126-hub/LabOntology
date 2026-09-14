@@ -56,4 +56,3 @@ def test_fdu_resource_verification_status_output_is_windows_console_safe(capsys)
     assert "[OK]" in output
     assert "✓" not in output
     assert "✗" not in output
-

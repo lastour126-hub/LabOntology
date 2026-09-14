@@ -14,4 +14,3 @@ def test_state_store_persists_state_and_events(tmp_path):
     assert loaded.mode == "agent"
     events = (store.run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
     assert '"event": "mission_created"' in events[0]
-

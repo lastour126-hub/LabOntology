@@ -17,4 +17,3 @@ def test_ontology_tool_requires_an_active_cache_directory():
 
     assert result.returncode != 0
     assert "--system-dir is required" in result.stderr
-

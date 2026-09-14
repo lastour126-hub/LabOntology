@@ -173,4 +173,3 @@ def test_missing_output_is_classified_as_not_retryable(tmp_path):
     assert run.status == "failed"
     assert run.failure_kind == "output_missing"
     assert run.retryable is False
-

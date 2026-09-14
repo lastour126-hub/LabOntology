@@ -115,4 +115,3 @@ def test_script_entrypoint_forwards_reconcile_subcommand(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["mission"]["observations"][-1]["status"] == "reconciled_unknown"
-

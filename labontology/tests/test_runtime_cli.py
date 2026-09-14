@@ -15,4 +15,3 @@ def test_load_skill_file_reads_command_and_outputs(tmp_path):
 
     assert spec.id == "skill:test"
     assert spec.outputs["artifact:result"] == "result.txt"
-

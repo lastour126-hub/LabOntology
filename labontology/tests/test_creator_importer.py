@@ -401,4 +401,3 @@ def test_export_bundle_carries_skill_knowledge_files_for_intake(tmp_path):
     assert (bundle / "Knowledge" / "skill" / "KB" / "schema.json").exists()
     manifest = json.loads((bundle / "skills.json").read_text(encoding="utf-8"))
     assert manifest["skills"][0]["knowledge_summary"]["file_count"] == 1
-

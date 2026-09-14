@@ -18,4 +18,3 @@ def test_registry_loads_suite_skills_from_data(tmp_path):
     suite = registry.suite("suite:test")
 
     assert suite.skills["skill:test"].id == "skill:test"
-

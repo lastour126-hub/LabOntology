@@ -52,4 +52,3 @@ def test_maintenance_updates_cache_manifest_timestamp(tmp_path):
     maintain_cache(cache, source, kind="knowledge")
     manifest = json.loads((cache / "cache-manifest.json").read_text(encoding="utf-8"))
     assert manifest["updated_at"] >= before
-

@@ -241,4 +241,3 @@ def test_import_uses_skill_capability_contract_when_no_device_file_exists(tmp_pa
     }]), tmp_path)["output_dir"])
     suite = next(x["entity"] for x in read_graph(cache) if x.get("entity", {}).get("type") == "SkillSuite")
     assert suite["properties"]["available_capabilities"] == ["capability:liquid-transfer"]
-

@@ -25,4 +25,3 @@ def test_skill_flow_loads_ordered_nodes():
     })
 
     assert [node.id for node in flow.nodes] == ["node:a", "node:b"]
-
