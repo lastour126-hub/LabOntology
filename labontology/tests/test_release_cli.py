@@ -149,3 +149,17 @@ def test_decide_executes_confirmed_routine_action(tmp_path: Path):
     ).stdout)
 
     assert result["mission"]["observations"][-1]["status"] == "succeeded"
+
+
+def test_fdu_quick_start_imports_and_starts_a_read_only_mission(tmp_path: Path):
+    imported = json.loads(run_cli(
+        "import", str(PROJECT_ROOT / "FduSkills"),
+        "--suite-id", "suite:fdu-quickstart", "--workspace", str(tmp_path),
+    ).stdout)
+
+    result = json.loads(run_cli(
+        "run", "--cache-dir", imported["cache_dir"],
+        "--goal", "检查实验步骤所需资源是否齐全",
+    ).stdout)
+
+    assert result["mission"]["status"] == "awaiting_decision"
