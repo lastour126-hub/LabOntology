@@ -7,6 +7,16 @@
 
 The public entrypoint keeps those boundaries intact while providing a short path for normal use. It does not import external historical Skills.
 
+## Install
+
+Run these commands from this directory before using the Skill:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+This installs the required `PyYAML` dependency in the Python environment that will run the commands below.
+
 ## FDU read-only example
 
 Run these commands from this directory:
