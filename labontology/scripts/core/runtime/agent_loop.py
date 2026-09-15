@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
@@ -66,21 +67,26 @@ class AgentRuntime:
 
     def context(self) -> dict[str, Any]:
         state = self._load()
-        candidates = []
+        cards: list[tuple[int, dict[str, Any]]] = []
+        goal_terms = set(re.findall(r"[A-Za-z0-9]+|[\u4e00-\u9fff]+", state.goal.lower()))
         for skill in self.skills.values():
-            record = asdict(skill)
             knowledge = self.knowledge.get(skill.id, {})
-            record["knowledge"] = {key: knowledge[key] for key in (
-                "description", "suite_id", "source_dir", "source_record_file", "parameters",
-                "confidence", "unresolved", "evidence", "capability_evidence", "knowledge_summary",
-                "instruction_source", "instruction_digest",
-            ) if key in knowledge}
-            documentation = knowledge.get("documentation", {})
-            record["knowledge"]["documentation_files"] = documentation.get("files", []) if isinstance(documentation, dict) else []
-            record["skill_document"] = str(Path(skill.working_dir) / "SKILL.md") if skill.working_dir else None
-            record["missing_inputs"] = [a for a in skill.input_artifacts if a not in state.artifacts]
-            record["missing_capabilities"] = sorted(set(skill.required_capabilities) - self.capabilities)
-            candidates.append(record)
+            description = str(knowledge.get("description") or "")
+            searchable = f"{skill.id} {description} {' '.join(skill.goal_types)} {' '.join(skill.triggers)}".lower()
+            score = sum(term in searchable for term in goal_terms)
+            card = {
+                "id": skill.id,
+                "name": skill.id,
+                "description": description,
+                "suite_id": knowledge.get("suite_id"),
+                "inputs": list(skill.input_artifacts),
+                "required_capabilities": list(skill.required_capabilities),
+                "side_effect_level": skill.side_effect_level,
+                "missing_inputs": [artifact for artifact in skill.input_artifacts if artifact not in state.artifacts],
+                "missing_capabilities": sorted(set(skill.required_capabilities) - self.capabilities),
+            }
+            cards.append((score, card))
+        candidates = [card for _, card in sorted(cards, key=lambda item: (-item[0], item[1]["id"]))[:5]]
         retry_candidates = []
         for action_id, execution in state.skill_executions.items():
             skill = self.skills.get(execution.get("skill_id"))
@@ -95,7 +101,7 @@ class AgentRuntime:
                     "failure_kind": execution.get("failure_kind"),
                     "retry_count": execution.get("retry_count", 0),
                 })
-        return {"mission": state.to_dict(), "skills": candidates,
+        return {"mission": state.to_dict(), "skills": candidates, "candidate_count": len(self.skills),
                 "available_capabilities": sorted(self.capabilities),
                 "start_skill": state.start_skill,
                 "retry_candidates": retry_candidates,

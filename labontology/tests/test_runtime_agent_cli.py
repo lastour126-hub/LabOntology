@@ -50,8 +50,9 @@ def test_cli_default_agent_loop_works_without_workflow_and_leaves_cache_readonly
     context = json.loads(capsys.readouterr().out)
     assert context["mission"]["status"] == "awaiting_decision"
     assert context["workflow_references"] == []
-    assert context["skills"][0]["knowledge"]["description"] == "Find measurement evidence"
-    assert context["skills"][0]["knowledge"]["unresolved"] == ["source authenticity"]
+    lookup = next(skill for skill in context["skills"] if skill["id"] == "lookup")
+    assert lookup["description"] == "Find measurement evidence"
+    assert "knowledge" not in lookup
     decision = tmp_path / "decision.json"
     decision.write_text(json.dumps({"kind": "skill", "skill_id": "lookup", "reason": "Get evidence first",
                                   "assessment": {"impact": "routine", "rationale": "Read literature",

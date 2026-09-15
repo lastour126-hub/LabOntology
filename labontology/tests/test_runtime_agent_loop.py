@@ -77,7 +77,7 @@ def test_process_skill_requires_current_skill_document_review(tmp_path):
     runtime = controller(tmp_path, [skill], skill_knowledge={"script": {
         "instruction_source": source, "instruction_digest": ["Do not guess output paths."]}})
     runtime.start("Run script")
-    assert runtime.context()["skills"][0]["knowledge"]["instruction_digest"] == ["Do not guess output paths."]
+    assert "instruction_digest" not in runtime.context()["skills"][0]
     with pytest.raises(ValueError, match="reviewed_instruction"):
         runtime.decide(choose("script"))
     state = runtime.decide({**choose("script"), "reviewed_instruction": source})
@@ -354,8 +354,28 @@ def test_candidate_context_links_large_manuals_without_repeating_their_text(tmp_
     runtime.start("Read")
     context = runtime.context()
     assert len(json.dumps(context)) < 5000
-    assert context["skills"][0]["knowledge"]["documentation_files"] == ["manual.md"]
-    assert context["skills"][0]["knowledge"]["unresolved"] == ["source date"]
+    assert context["skills"][0]["description"] == "Find evidence"
+    assert "documentation_files" not in context["skills"][0]
+
+
+def test_context_returns_compact_goal_matched_skill_cards(tmp_path):
+    skills = [SkillSpec(f"other-{index}", [], execution_mode="agent") for index in range(6)]
+    skills.append(SkillSpec("reaction-planner", [], execution_mode="agent"))
+    knowledge = {skill.id: {"description": "general helper"} for skill in skills}
+    knowledge["reaction-planner"] = {"description": "Plan an ATA reaction experiment"}
+    runtime = controller(tmp_path, skills, skill_knowledge=knowledge)
+    runtime.start("Plan an ATA reaction")
+
+    context = runtime.context()
+
+    assert context["candidate_count"] == 7
+    assert len(context["skills"]) == 5
+    assert context["skills"][0] == {
+        "id": "reaction-planner", "name": "reaction-planner",
+        "description": "Plan an ATA reaction experiment", "suite_id": None,
+        "inputs": [], "required_capabilities": [], "side_effect_level": "read_only",
+        "missing_inputs": [], "missing_capabilities": [],
+    }
 
 
 def test_factual_answer_replans_without_requiring_an_approval_flag(tmp_path):
