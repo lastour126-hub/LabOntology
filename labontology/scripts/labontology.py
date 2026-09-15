@@ -20,6 +20,14 @@ from core.runtime import commands as runtime_commands
 from core.runtime.registry import Registry
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def import_suite(skill_root: Path, suite_id: str, workspace: Path) -> dict[str, Any]:
     skill_root, workspace = skill_root.resolve(), workspace.resolve()
     with TemporaryDirectory(prefix="labontology-bundle-") as temporary:
@@ -56,7 +64,7 @@ def inspect_cache(cache_dir: Path) -> dict[str, Any]:
     missing = sum(not Path(record["path"]).is_file() for record in sources if record.get("path"))
     changed = sum(
         Path(record["path"]).is_file()
-        and record.get("sha256") != hashlib.sha256(Path(record["path"]).read_bytes()).hexdigest()
+        and record.get("sha256") != _sha256(Path(record["path"]))
         for record in sources if record.get("path") and record.get("sha256")
     )
     suites = [{"suite_id": suite.id, "skill_count": len(suite.skills)}
@@ -75,6 +83,19 @@ def inspect_cache(cache_dir: Path) -> dict[str, Any]:
 
 def _workspace_cache_path(workspace: Path) -> Path:
     return workspace.resolve() / "labontology_workspace_cache"
+
+
+def _cached_suites_for_root(cache_dir: Path, skill_root: Path) -> list[str]:
+    index_path = cache_dir / "source-index.json"
+    if not index_path.is_file():
+        return []
+    try:
+        sources = json.loads(index_path.read_text(encoding="utf-8")).get("sources", [])
+    except (OSError, ValueError, json.JSONDecodeError):
+        return []
+    return sorted({str(record["suite_id"]) for record in sources
+                   if isinstance(record, dict) and record.get("suite_id") and record.get("path")
+                   and Path(str(record["path"])).resolve().is_relative_to(skill_root)})
 
 
 def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dict[str, Any] | None:
@@ -98,19 +119,28 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
     sources = index.get("sources", [])
     if not isinstance(sources, list):
         return None
-    matched_sources = 0
-    missing_sources = 0
+    scoped_sources = []
     for record in sources:
         if not isinstance(record, dict) or not record.get("path"):
             continue
         source = Path(str(record["path"])).resolve()
+        in_root = source.is_relative_to(skill_root)
+        if suite_id:
+            if record.get("suite_id") != suite_id:
+                continue
+        elif not in_root:
+            continue
+        scoped_sources.append((record, source))
+    if not scoped_sources:
+        return None
+    missing_sources = 0
+    changed_sources = 0
+    for record, source in scoped_sources:
         if not source.is_file():
             missing_sources += 1
-        elif not record.get("sha256") or hashlib.sha256(source.read_bytes()).hexdigest() != record["sha256"]:
-            missing_sources += 1
-        if source.is_relative_to(skill_root):
-            matched_sources += 1
-    if not matched_sources or missing_sources:
+        elif not record.get("sha256") or _sha256(source) != record["sha256"]:
+            changed_sources += 1
+    if missing_sources or changed_sources:
         return None
     validation_output = io.StringIO()
     with contextlib.redirect_stdout(validation_output):
@@ -119,17 +149,39 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
     return {
         "cache_dir": str(cache_dir),
         "suite_ids": sorted(suite_ids),
-        "matched_sources": matched_sources,
-        "source_integrity": {"records": len(sources), "missing": missing_sources},
+        "matched_sources": len(scoped_sources),
+        "source_integrity": {"records": len(scoped_sources), "missing": missing_sources, "changed": changed_sources},
         "source_freshness": "current",
     }
 
 
 def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = None) -> dict[str, Any]:
     """Refresh one explicit Suite, or safely place unclassified Skills in General."""
-    result = import_suite(skill_root, suite_id or "suite:general", workspace)
+    skill_root = skill_root.resolve()
+    cache = _workspace_cache_path(workspace)
+    matched_suites = _cached_suites_for_root(cache, skill_root)
+    if suite_id:
+        selected_suite = suite_id
+    elif len(matched_suites) == 1:
+        selected_suite = matched_suites[0]
+    elif len(matched_suites) > 1:
+        raise ValueError("Multiple existing SkillSuites own this root; specify --suite-id")
+    else:
+        selected_suite = "suite:general"
+    current = _cache_match(cache, skill_root, selected_suite)
+    if current is not None:
+        return {
+            "suite_id": selected_suite,
+            "cache_dir": current["cache_dir"],
+            "skill_count": len(Registry.load_cache(cache).suite(selected_suite).skills),
+            "validation": {"graphs": 1, "valid": True},
+            "suite_ids": current["suite_ids"],
+            "synchronized": False,
+            "reused": True,
+        }
+    result = import_suite(skill_root, selected_suite, workspace)
     manifest = json.loads((Path(result["cache_dir"]) / "cache-manifest.json").read_text(encoding="utf-8"))
-    return {**result, "suite_ids": manifest["suite_ids"], "synchronized": True}
+    return {**result, "suite_ids": manifest["suite_ids"], "synchronized": True, "reused": False}
 
 
 def resolve_cache(skill_root: Path, workspace: Path, suite_id: str | None = None) -> dict[str, Any]:
@@ -177,27 +229,95 @@ def mission_status(cache_dir: Path, mission_id: str) -> dict[str, Any]:
     ])
 
 
-def resume_mission(cache_dir: Path, mission_id: str) -> dict[str, Any]:
-    return _runtime_result([
-        "resume", "--system-dir", str(cache_dir.resolve()), "--mission-id", mission_id,
-    ])
+def resume_mission(cache_dir: Path, mission_id: str, *, confirm: bool = False, reject: bool = False,
+                   answer: str = "", summary: str = "", evidence: list[str] | None = None,
+                   provided_artifacts: list[str] | None = None, agent_completed: bool = False,
+                   agent_failed: bool = False) -> dict[str, Any]:
+    arguments = ["resume", "--system-dir", str(cache_dir.resolve()), "--mission-id", mission_id]
+    for flag, enabled in (("--confirm", confirm), ("--reject", reject),
+                          ("--agent-completed", agent_completed), ("--agent-failed", agent_failed)):
+        if enabled:
+            arguments.append(flag)
+    if answer:
+        arguments.extend(["--answer", answer])
+    if summary:
+        arguments.extend(["--summary", summary])
+    for item in evidence or []:
+        arguments.extend(["--evidence", item])
+    for item in provided_artifacts or []:
+        arguments.extend(["--provide-artifact", item])
+    return _runtime_result(arguments)
 
 
-def _routine_decision(cache_dir: Path, mission_id: str, skill_id: str, reason: str) -> dict[str, Any]:
+def _select_skill(registry: Registry, skill_id: str, suite_id: str | None = None):
+    if suite_id:
+        try:
+            suite = registry.suite(suite_id)
+        except KeyError as exc:
+            raise ValueError(f"Unknown SkillSuite: {suite_id}") from exc
+        skill = suite.skills.get(skill_id)
+        if skill is None:
+            raise ValueError(f"Unknown Skill in {suite_id}: {skill_id}")
+        return suite, skill
+    matches = [(suite, suite.skills[skill_id]) for suite in registry.suites.values() if skill_id in suite.skills]
+    if not matches:
+        raise ValueError(f"Unknown Skill: {skill_id}")
+    if len(matches) != 1:
+        raise ValueError(f"Skill {skill_id} belongs to multiple SkillSuites; specify --suite-id")
+    return matches[0]
+
+
+def describe_skill(cache_dir: Path, skill_id: str, suite_id: str | None = None) -> dict[str, Any]:
+    suite, skill = _select_skill(Registry.load_cache(cache_dir.resolve()), skill_id, suite_id)
+    knowledge = suite.skill_knowledge.get(skill.id, {})
+    return {
+        "id": skill.id,
+        "suite_id": suite.id,
+        "name": knowledge.get("name", skill.id),
+        "description": knowledge.get("description"),
+        "inputs": list(skill.input_artifacts),
+        "outputs": dict(skill.outputs),
+        "required_capabilities": list(skill.required_capabilities),
+        "side_effect_level": skill.side_effect_level,
+        "execution_mode": skill.execution_mode,
+        "runnable": skill.runnable,
+        "instruction_source": knowledge.get("instruction_source"),
+        "instruction_digest": knowledge.get("instruction_digest", []),
+        "documentation": knowledge.get("documentation", {}),
+        "unresolved": knowledge.get("unresolved", []),
+        "evidence": knowledge.get("evidence", []),
+    }
+
+
+def list_missions(cache_dir: Path, query: str | None = None) -> dict[str, Any]:
+    runs_dir = cache_dir.resolve() / "runs"
+    needle = (query or "").casefold()
+    missions = []
+    for state_path in sorted(runs_dir.glob("*/state.json")) if runs_dir.is_dir() else []:
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        goal = str(state.get("goal", ""))
+        if needle and needle not in goal.casefold() and needle not in str(state.get("mission_id", "")).casefold():
+            continue
+        missions.append({"mission_id": state.get("mission_id", state_path.parent.name), "goal": goal,
+                         "status": state.get("status", "unknown")})
+    return {"missions": missions}
+
+
+def _routine_decision(cache_dir: Path, mission_id: str, skill_id: str, reason: str,
+                      suite_id: str | None = None) -> dict[str, Any]:
     cache_dir = cache_dir.resolve()
     registry = Registry.load_cache(cache_dir)
-    if len(registry.suites) != 1:
-        raise ValueError("Release decisions require exactly one suite per cache")
-    skill = next(iter(registry.suites.values())).skills.get(skill_id)
-    if skill is None:
-        raise ValueError(f"Unknown Skill: {skill_id}")
+    suite, skill = _select_skill(registry, skill_id, suite_id)
     if skill.side_effect_level != "read_only":
         raise ValueError("Significant or device-facing actions require the Runtime approval workflow")
     if skill.execution_mode != "process" or not skill.runnable:
         raise ValueError("Only runnable read-only process Skills can use the release decision command")
     if skill.input_artifacts or skill.required_capabilities:
         raise ValueError("Skills with required inputs or capabilities require the Runtime approval workflow")
-    source = next(iter(registry.suites.values())).skill_knowledge.get(skill_id, {}).get("instruction_source")
+    source = suite.skill_knowledge.get(skill_id, {}).get("instruction_source")
     if not isinstance(source, dict) or not source.get("path") or not source.get("sha256"):
         raise ValueError("The Skill lacks a recorded instruction source; use the advanced Runtime workflow")
     document = Path(str(source["path"])).resolve()
@@ -224,8 +344,9 @@ def _routine_decision(cache_dir: Path, mission_id: str, skill_id: str, reason: s
     }
 
 
-def decide_routine_action(cache_dir: Path, mission_id: str, skill_id: str, reason: str) -> dict[str, Any]:
-    decision = _routine_decision(cache_dir, mission_id, skill_id, reason)
+def decide_routine_action(cache_dir: Path, mission_id: str, skill_id: str, reason: str,
+                          suite_id: str | None = None) -> dict[str, Any]:
+    decision = _routine_decision(cache_dir, mission_id, skill_id, reason, suite_id)
     temporary_path: Path | None = None
     try:
         with NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as handle:
@@ -266,6 +387,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     resume_parser = subparsers.add_parser("resume", help="Resume an Agent-mode mission")
     resume_parser.add_argument("--cache-dir", type=Path, required=True)
     resume_parser.add_argument("--mission-id", required=True)
+    resume_parser.add_argument("--confirm", action="store_true")
+    resume_parser.add_argument("--reject", action="store_true")
+    resume_parser.add_argument("--answer", default="")
+    resume_parser.add_argument("--summary", default="")
+    resume_parser.add_argument("--evidence", action="append", default=[])
+    resume_parser.add_argument("--provide-artifact", action="append", default=[], metavar="ARTIFACT_ID=PATH")
+    resume_parser.add_argument("--agent-completed", action="store_true")
+    resume_parser.add_argument("--agent-failed", action="store_true")
     status_parser = subparsers.add_parser("status", help="Show a persisted mission")
     status_parser.add_argument("--cache-dir", type=Path, required=True)
     status_parser.add_argument("--mission-id", required=True)
@@ -273,7 +402,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     decide_parser.add_argument("--cache-dir", type=Path, required=True)
     decide_parser.add_argument("--mission-id", required=True)
     decide_parser.add_argument("--skill-id", required=True)
+    decide_parser.add_argument("--suite-id")
     decide_parser.add_argument("--reason", required=True)
+    describe_parser = subparsers.add_parser("describe-skill", help="Read full details for one selected Skill")
+    describe_parser.add_argument("--cache-dir", type=Path, required=True)
+    describe_parser.add_argument("--skill-id", required=True)
+    describe_parser.add_argument("--suite-id")
+    missions_parser = subparsers.add_parser("missions", help="List persisted Agent missions")
+    missions_parser.add_argument("--cache-dir", type=Path, required=True)
+    missions_parser.add_argument("--query")
     args = parser.parse_args(argv)
     try:
         if args.command == "import":
@@ -287,11 +424,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "run":
             result = run_mission(args.cache_dir, args.goal, args.mission_id, args.suite_id, args.input_artifact)
         elif args.command == "resume":
-            result = resume_mission(args.cache_dir, args.mission_id)
+            result = resume_mission(args.cache_dir, args.mission_id, confirm=args.confirm, reject=args.reject,
+                                    answer=args.answer, summary=args.summary, evidence=args.evidence,
+                                    provided_artifacts=args.provide_artifact,
+                                    agent_completed=args.agent_completed, agent_failed=args.agent_failed)
         elif args.command == "status":
             result = mission_status(args.cache_dir, args.mission_id)
+        elif args.command == "decide":
+            result = decide_routine_action(args.cache_dir, args.mission_id, args.skill_id, args.reason, args.suite_id)
+        elif args.command == "describe-skill":
+            result = describe_skill(args.cache_dir, args.skill_id, args.suite_id)
         else:
-            result = decide_routine_action(args.cache_dir, args.mission_id, args.skill_id, args.reason)
+            result = list_missions(args.cache_dir, args.query)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, ensure_ascii=False, indent=2))

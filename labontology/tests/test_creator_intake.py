@@ -123,6 +123,28 @@ def test_each_suite_reuses_the_workspace_cache(tmp_path):
     assert (Path(first["output_dir"]) / "ontology.jsonl").exists()
 
 
+def test_shared_skill_can_belong_to_multiple_explicit_suites(tmp_path):
+    source = tmp_path / "shared"
+    source.mkdir()
+    (source / "SKILL.md").write_text("# Shared\n", encoding="utf-8")
+    receive_bundle(bundle(tmp_path / "one", suite="suite:one", skills=[{
+        "id": "shared", "source_dir": str(source), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)
+    cache = Path(receive_bundle(bundle(tmp_path / "two", suite="suite:two", skills=[{
+        "id": "shared", "source_dir": str(source), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)["output_dir"])
+
+    graph = read_graph(cache)
+    assert sum(record.get("entity", {}).get("id") == "skill:shared" for record in graph) == 1
+    assert {record["relation"]["source"] for record in graph if record.get("relation", {}).get("relation") == "containsSkill"
+            and record["relation"]["target"] == "skill:shared"} == {"suite:one", "suite:two"}
+    sources = json.loads((cache / "source-index.json").read_text(encoding="utf-8"))["sources"]
+    assert {(record["path"], record["suite_id"]) for record in sources if record["path"] == str((source / "SKILL.md").resolve())} == {
+        (str((source / "SKILL.md").resolve()), "suite:one"),
+        (str((source / "SKILL.md").resolve()), "suite:two"),
+    }
+
+
 def test_graph_preserves_explicit_workflow_as_reference(tmp_path):
     root = tmp_path / "bundle"
     root.mkdir()

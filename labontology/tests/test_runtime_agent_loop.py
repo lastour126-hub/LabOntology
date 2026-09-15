@@ -378,6 +378,21 @@ def test_context_returns_compact_goal_matched_skill_cards(tmp_path):
     }
 
 
+def test_context_ranks_chinese_goal_against_skill_metadata_without_expanding_cards(tmp_path):
+    unrelated = SkillSpec("aaa-unrelated", [], execution_mode="agent")
+    relevant = SkillSpec("reaction-plan", [], execution_mode="agent", triggers=["氢化", "反应"])
+    runtime = controller(tmp_path, [unrelated, relevant], skill_knowledge={
+        "reaction-plan": {"description": "设计氢化反应方案"},
+        "aaa-unrelated": {"description": "整理库存"},
+    })
+    runtime.start("请设计氢化反应方案")
+
+    context = runtime.context()
+
+    assert context["skills"][0]["id"] == "reaction-plan"
+    assert len(context["skills"]) == 2
+
+
 def test_factual_answer_replans_without_requiring_an_approval_flag(tmp_path):
     runtime = controller(tmp_path, [SkillSpec("device", [sys.executable, "-c", "print('no')"])])
     runtime.start("Measure")

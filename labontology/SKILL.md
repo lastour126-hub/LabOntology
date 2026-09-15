@@ -10,7 +10,7 @@ Help users move a laboratory task forward safely. Treat ordinary descriptions of
 ## Conversation-first workflow
 
 1. Understand the experiment goal and whether the user is preparing, checking readiness or progress, maintaining the workflow library, or requesting an action.
-2. Each laboratory workspace has one workspace cache and one unified graph. Before planning, synchronize the workspace Skill root, then run `resolve-cache`. If the source inventory and hashes are current, reuse the one workspace cache; otherwise synchronize the same graph instead of creating another cache.
+2. Each laboratory workspace has one workspace cache and one unified graph. Before planning, run `resolve-cache` for the relevant Skill root and explicit Suite when one is known. If its source inventory and hashes are current, reuse the one workspace cache. Only when that scoped check is stale or unavailable, synchronize the workspace Skill root for the same Suite; a current synchronization is a no-op and never creates another cache.
 3. A `SkillSuite` is an explicit semantic collection inside the unified graph, not a cache directory and not an Agent-inferred project label. Unclassified or general Skills belong to `suite:general`; do not invent FDU, IB, OASIS, or another Suite from a Skill's name or prose. A task data file is not a reason to rebuild the workflow-library cache unless the user says it changes the library itself.
 4. Explain the result in laboratory language: recommended next step, available procedure, missing prerequisite, current task state, and any approval needed.
 5. Do not ask the user to choose a command or expose cache, graph, Skill, or Runtime terminology unless they are maintaining the library or ask for technical detail.
@@ -35,7 +35,7 @@ Confirm only a routine read-only check that is eligible under the recorded polic
 
 ## Internal command routing
 
-Use `scripts/labontology.py` from this Skill directory only when the conversation requires it. For an available Skill root, call `sync --skill-root <directory> --workspace <workspace>` first, then `resolve-cache --skill-root <directory> --workspace <workspace>`. The result identifies the authoritative one workspace cache; use it with `inspect`, `run`, `resume`, `status`, or `decide`. Include `--suite-id` only when an explicit Suite is known and relevant to the task; it scopes a unified graph and never selects another cache. Keep command output as evidence for the response rather than presenting it as the user interface.
+Use `scripts/labontology.py` from this Skill directory only when the conversation requires it. For an available Skill root, call `resolve-cache --skill-root <directory> --workspace <workspace>` first; if it reports stale or unavailable, call `sync --skill-root <directory> --workspace <workspace>` and resolve again. The result identifies the authoritative one workspace cache; use it with `inspect`, `run`, `resume`, `status`, `missions`, or `decide`. Use `describe-skill` only after a compact candidate is selected and full instructions, inputs, evidence, or safety constraints are needed. Include `--suite-id` whenever the relevant Suite is explicit; it scopes a unified graph and never selects another cache. For a repeated request such as “continue yesterday's experiment”, use `missions --query <goal words>` before `status` or `resume`. Keep command output as evidence for the response rather than presenting it as the user interface.
 
 ## Safety boundary
 

@@ -136,6 +136,49 @@ def test_sync_imports_an_unclassified_skill_into_general_suite(tmp_path: Path):
     assert result["suite_ids"] == ["suite:general"]
 
 
+def test_sync_reuses_a_current_explicit_suite_without_rebuilding(tmp_path: Path):
+    source = make_skill_root(tmp_path)
+    run_cli("import", str(source), "--suite-id", "suite:demo", "--workspace", str(tmp_path))
+
+    result = json.loads(run_cli(
+        "sync", "--skill-root", str(source), "--suite-id", "suite:demo", "--workspace", str(tmp_path),
+    ).stdout)
+
+    assert result["synchronized"] is False
+    assert result["reused"] is True
+
+
+def test_sync_refreshes_the_existing_suite_for_a_known_root_without_reclassifying_it(tmp_path: Path):
+    source = make_skill_root(tmp_path)
+    run_cli("import", str(source), "--suite-id", "suite:demo", "--workspace", str(tmp_path))
+    (source / "SKILL.md").write_text("---\nname: demo\ndescription: changed\n---\n", encoding="utf-8")
+
+    result = json.loads(run_cli(
+        "sync", "--skill-root", str(source), "--workspace", str(tmp_path),
+    ).stdout)
+
+    assert result["suite_id"] == "suite:demo"
+    assert result["suite_ids"] == ["suite:demo"]
+
+
+def test_resolve_cache_for_one_suite_ignores_another_suite_stale_sources(tmp_path: Path):
+    first = make_skill_root(tmp_path)
+    second = tmp_path / "other-skill"
+    second.mkdir()
+    second_document = second / "SKILL.md"
+    second_document.write_text("---\nname: other\n---\n", encoding="utf-8")
+    run_cli("import", str(first), "--suite-id", "suite:first", "--workspace", str(tmp_path))
+    run_cli("import", str(second), "--suite-id", "suite:second", "--workspace", str(tmp_path))
+    second_document.write_text("---\nname: other\ndescription: changed\n---\n", encoding="utf-8")
+
+    result = json.loads(run_cli(
+        "resolve-cache", "--skill-root", str(first), "--suite-id", "suite:first", "--workspace", str(tmp_path),
+    ).stdout)
+
+    assert result["suite_id"] == "suite:first"
+    assert result["source_integrity"]["changed"] == 0
+
+
 def test_run_creates_mission_and_returns_context(tmp_path: Path):
     cache = import_demo_cache(tmp_path)
 
@@ -171,6 +214,27 @@ def test_resume_is_available_from_release_entrypoint(tmp_path: Path):
     ).stdout)
 
     assert result["mission"]["mission_id"] == mission_id
+
+
+def test_describe_skill_returns_full_details_only_for_selected_skill(tmp_path: Path):
+    cache = import_demo_cache(tmp_path)
+
+    result = json.loads(run_cli(
+        "describe-skill", "--cache-dir", str(cache), "--skill-id", "demo", "--suite-id", "suite:demo",
+    ).stdout)
+
+    assert result["id"] == "demo"
+    assert result["suite_id"] == "suite:demo"
+    assert "instruction_source" in result
+
+
+def test_missions_lists_existing_missions_and_matches_goal_text(tmp_path: Path):
+    cache = import_demo_cache(tmp_path)
+    run_cli("run", "--cache-dir", str(cache), "--mission-id", "yesterday", "--goal", "continue reaction")
+
+    result = json.loads(run_cli("missions", "--cache-dir", str(cache), "--query", "reaction").stdout)
+
+    assert result["missions"] == [{"mission_id": "yesterday", "goal": "continue reaction", "status": "awaiting_decision"}]
 
 
 def test_status_reads_mission_created_by_run(tmp_path: Path):
@@ -216,6 +280,21 @@ def test_decide_executes_confirmed_routine_action(tmp_path: Path):
     result = json.loads(run_cli(
         "decide", "--cache-dir", str(cache), "--mission-id", mission_id,
         "--skill-id", "routine", "--reason", "read source", input="yes\n",
+    ).stdout)
+
+    assert result["mission"]["observations"][-1]["status"] == "succeeded"
+
+
+def test_decide_selects_a_skill_from_an_explicit_suite_in_a_unified_cache(tmp_path: Path):
+    cache, mission_id = cache_and_mission(tmp_path, "routine", "read_only")
+    run_cli(
+        "import", str(make_process_skill_root(tmp_path, "other", "read_only")),
+        "--suite-id", "suite:other", "--workspace", str(tmp_path),
+    )
+
+    result = json.loads(run_cli(
+        "decide", "--cache-dir", str(cache), "--mission-id", mission_id,
+        "--skill-id", "routine", "--suite-id", "suite:decision", "--reason", "read source", input="yes\n",
     ).stdout)
 
     assert result["mission"]["observations"][-1]["status"] == "succeeded"

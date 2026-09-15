@@ -23,6 +23,15 @@ def _artifact_paths(artifacts: dict[str, str]) -> dict[str, str]:
     return result
 
 
+def _search_terms(value: str) -> set[str]:
+    """Return compact English terms and overlapping Chinese terms for ranking."""
+    terms = set(re.findall(r"[a-z0-9]+", value.lower()))
+    for run in re.findall(r"[\u4e00-\u9fff]+", value):
+        terms.add(run)
+        terms.update(run[index:index + 2] for index in range(len(run) - 1))
+    return terms
+
+
 class AgentRuntime:
     def __init__(
         self, skills: dict[str, SkillSpec], invoker: SkillInvoker, store: StateStore,
@@ -68,12 +77,13 @@ class AgentRuntime:
     def context(self) -> dict[str, Any]:
         state = self._load()
         cards: list[tuple[int, dict[str, Any]]] = []
-        goal_terms = set(re.findall(r"[A-Za-z0-9]+|[\u4e00-\u9fff]+", state.goal.lower()))
+        goal_terms = _search_terms(state.goal)
         for skill in self.skills.values():
             knowledge = self.knowledge.get(skill.id, {})
             description = str(knowledge.get("description") or "")
-            searchable = f"{skill.id} {description} {' '.join(skill.goal_types)} {' '.join(skill.triggers)}".lower()
-            score = sum(term in searchable for term in goal_terms)
+            searchable = f"{skill.id} {description} {' '.join(skill.goal_types)} {' '.join(skill.triggers)} {' '.join(skill.required_capabilities)} {' '.join(skill.input_artifacts)}".lower()
+            searchable_terms = _search_terms(searchable)
+            score = sum(term in searchable_terms for term in goal_terms)
             card = {
                 "id": skill.id,
                 "name": skill.id,

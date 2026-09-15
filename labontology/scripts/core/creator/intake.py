@@ -355,15 +355,43 @@ def _suite_owned_ids(records: list[dict[str, Any]], suite_id: str) -> set[str]:
 
 
 def _replace_suite_records(existing: list[dict[str, Any]], incoming: list[dict[str, Any]], suite_id: str) -> list[dict[str, Any]]:
-    owned = _suite_owned_ids(existing, suite_id)
+    relations = [record["relation"] for record in existing if "relation" in record]
+    old_skill_ids = {relation["target"] for relation in relations
+                     if relation.get("relation") == "containsSkill" and relation.get("source") == suite_id}
+    incoming_skill_ids = {record["relation"]["target"] for record in incoming
+                          if record.get("relation", {}).get("relation") == "containsSkill"
+                          and record["relation"].get("source") == suite_id}
+    other_suite_members = {relation["target"] for relation in relations
+                           if relation.get("relation") == "containsSkill" and relation.get("source") != suite_id}
+    removable_skills = old_skill_ids - incoming_skill_ids - other_suite_members
+    removable_contracts = {relation["target"] for relation in relations
+                           if relation.get("relation") == "hasContract" and relation.get("source") in removable_skills}
     retained = [record for record in existing if not (
-        ("entity" in record and record["entity"].get("id") in owned)
-        or ("relation" in record and (record["relation"].get("source") in owned or record["relation"].get("target") in owned))
+        ("entity" in record and record["entity"].get("id") in {suite_id} | removable_skills | removable_contracts)
+        or ("relation" in record and (
+            record["relation"].get("source") == suite_id
+            or record["relation"].get("source") in removable_skills
+            or record["relation"].get("target") in removable_skills
+            or record["relation"].get("source") in removable_contracts
+            or record["relation"].get("target") in removable_contracts
+        ))
+    )]
+    old_flows = {relation["target"] for relation in relations
+                 if relation.get("relation") == "providesSkillFlow" and relation.get("source") == suite_id}
+    old_nodes = {relation["target"] for relation in relations
+                 if relation.get("relation") == "hasNode" and relation.get("source") in old_flows}
+    retained = [record for record in retained if not (
+        ("entity" in record and record["entity"].get("id") in old_flows | old_nodes)
+        or ("relation" in record and (
+            record["relation"].get("source") in old_flows | old_nodes
+            or record["relation"].get("target") in old_flows | old_nodes
+        ))
     )]
     retained_entities = {record["entity"]["id"] for record in retained if "entity" in record}
     incoming_entities = {record["entity"]["id"] for record in incoming if "entity" in record}
     conflicts = sorted((retained_entities & incoming_entities) - {
-        entity_id for entity_id in retained_entities & incoming_entities if entity_id.startswith("artifact-type:")
+        entity_id for entity_id in retained_entities & incoming_entities
+        if entity_id.startswith(("artifact-type:", "skill:", "contract:compact-"))
     })
     if conflicts:
         raise ValueError(f"duplicate entity IDs across SkillSuites: {conflicts}")
@@ -385,12 +413,12 @@ def _replace_suite_records(existing: list[dict[str, Any]], incoming: list[dict[s
 
 
 def _merge_sources(existing: list[dict[str, Any]], incoming: list[dict[str, Any]], suite_id: str) -> list[dict[str, Any]]:
-    merged: dict[str, dict[str, Any]] = {
-        str(record["path"]): record for record in existing
+    merged: dict[tuple[str, str], dict[str, Any]] = {
+        (str(record["path"]), str(record.get("suite_id", ""))): record for record in existing
         if isinstance(record, dict) and record.get("path") and record.get("suite_id") != suite_id
     }
     for record in incoming:
-        merged[str(record["path"])] = record
+        merged[(str(record["path"]), str(record.get("suite_id", "")))] = record
     return list(merged.values())
 
 
