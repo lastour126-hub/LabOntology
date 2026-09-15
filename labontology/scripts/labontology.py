@@ -28,11 +28,12 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def import_suite(skill_root: Path, suite_id: str, workspace: Path) -> dict[str, Any]:
+def import_suite(skill_root: Path, suite_id: str, workspace: Path,
+                 skill_ids: set[str] | None = None) -> dict[str, Any]:
     skill_root, workspace = skill_root.resolve(), workspace.resolve()
     with TemporaryDirectory(prefix="labontology-bundle-") as temporary:
         bundle_dir = Path(temporary)
-        export_bundle(skill_root, bundle_dir, suite_id)
+        export_bundle(skill_root, bundle_dir, suite_id, include_skill_ids=skill_ids)
         imported = receive_bundle(bundle_dir, workspace, source_root=skill_root)
 
     cache_dir = Path(imported["output_dir"])
@@ -122,12 +123,29 @@ def _explicit_suites_for_root(cache_dir: Path, skill_root: Path) -> list[str]:
                   if Path(str(root)).resolve() == skill_root)
 
 
-def _library_files(skill_root: Path) -> set[Path]:
+def _library_files(skill_root: Path, skill_ids: set[str] | None = None) -> set[Path]:
     ignored_parts = {"__pycache__", ".git", ".hg", ".svn"}
     source_dirs = {Path(str(skill["source_dir"])).resolve() for skill in discover_tree(skill_root)
+                   if skill_ids is None or str(skill.get("id")) in skill_ids
                    if skill.get("source_dir")}
     return {path.resolve() for source_dir in source_dirs for path in source_dir.rglob("*")
             if path.is_file() and not any(part in ignored_parts for part in path.parts)}
+
+
+def _suite_skill_ids(cache_dir: Path, suite_id: str) -> set[str]:
+    try:
+        return set(Registry.load_cache(cache_dir).suite(suite_id).skills)
+    except (FileNotFoundError, KeyError, ValueError, OSError, json.JSONDecodeError):
+        return set()
+
+
+def _new_skill_ids(skill_root: Path, cache_dir: Path) -> set[str]:
+    discovered = {str(skill.get("id")) for skill in discover_tree(skill_root) if skill.get("id")}
+    try:
+        known = {skill_id for suite in Registry.load_cache(cache_dir).suites.values() for skill_id in suite.skills}
+    except (FileNotFoundError, ValueError, OSError, json.JSONDecodeError):
+        known = set()
+    return discovered - known
 
 
 def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dict[str, Any] | None:
@@ -170,7 +188,9 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
     if not scoped_sources:
         return None
     known_paths = {source for _, source in scoped_sources}
-    if not _library_files(skill_root).issubset(known_paths):
+    mapped_suites = _explicit_suites_for_root(cache_dir, skill_root)
+    expected_skill_ids = _suite_skill_ids(cache_dir, suite_id) if suite_id and len(mapped_suites) > 1 else None
+    if not _library_files(skill_root, expected_skill_ids).issubset(known_paths):
         return None
     missing_sources = 0
     changed_sources = 0
@@ -194,19 +214,27 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
     }
 
 
-def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = None) -> dict[str, Any]:
+def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = None,
+                   skill_ids: set[str] | None = None) -> dict[str, Any]:
     """Refresh one explicit Suite, or safely place unclassified Skills in General."""
     skill_root = skill_root.resolve()
     cache = _workspace_cache_path(workspace)
     matched_suites = _cached_suites_for_root(cache, skill_root)
+    new_skill_ids = _new_skill_ids(skill_root, cache)
     if suite_id:
         selected_suite = suite_id
     elif len(matched_suites) == 1:
         selected_suite = matched_suites[0]
     elif len(matched_suites) > 1:
+        if new_skill_ids:
+            return sync_workspace(skill_root, workspace, "suite:general", skill_ids=new_skill_ids)
         raise ValueError("Multiple existing SkillSuites own this root; specify --suite-id")
     else:
         selected_suite = "suite:general"
+    explicit_mappings = _explicit_suites_for_root(cache, skill_root)
+    selected_ids = skill_ids
+    if selected_ids is None and len(explicit_mappings) > 1:
+        selected_ids = _suite_skill_ids(cache, selected_suite)
     current = _cache_match(cache, skill_root, selected_suite)
     if current is not None:
         return {
@@ -218,7 +246,7 @@ def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = Non
             "synchronized": False,
             "reused": True,
         }
-    result = import_suite(skill_root, selected_suite, workspace)
+    result = import_suite(skill_root, selected_suite, workspace, selected_ids)
     manifest = json.loads((Path(result["cache_dir"]) / "cache-manifest.json").read_text(encoding="utf-8"))
     return {**result, "suite_ids": manifest["suite_ids"], "synchronized": True, "reused": False}
 
@@ -229,7 +257,11 @@ def sync_workspace_all(skill_root: Path, workspace: Path) -> dict[str, Any]:
     suite_ids = _explicit_suites_for_root(cache, skill_root)
     if not suite_ids:
         raise ValueError("--all requires an existing explicit SkillSuite mapping for this root")
-    results = [sync_workspace(skill_root, workspace, suite_id) for suite_id in suite_ids]
+    new_skill_ids = _new_skill_ids(skill_root, cache)
+    results = [sync_workspace(skill_root, workspace, suite_id,
+                              skill_ids=_suite_skill_ids(cache, suite_id)) for suite_id in suite_ids]
+    if new_skill_ids:
+        results.append(sync_workspace(skill_root, workspace, "suite:general", skill_ids=new_skill_ids))
     return {"cache_dir": str(_workspace_cache_path(workspace)), "suites": results,
             "synchronized": any(result["synchronized"] for result in results)}
 

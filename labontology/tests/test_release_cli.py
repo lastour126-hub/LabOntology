@@ -188,6 +188,16 @@ def test_resolve_cache_detects_a_new_source_file_and_sync_imports_it(tmp_path: P
         "resolve-cache", "--skill-root", str(source), "--suite-id", "suite:demo", "--workspace", str(tmp_path),
         check=False,
     )
+
+
+def cache_suite_skills(cache: Path) -> dict[str, set[str]]:
+    records = [json.loads(line) for line in (cache / "ontology.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    result: dict[str, set[str]] = {}
+    for record in records:
+        relation = record.get("relation", {})
+        if relation.get("relation") == "containsSkill":
+            result.setdefault(relation["source"], set()).add(relation["target"].removeprefix("skill:"))
+    return result
     refreshed = json.loads(run_cli(
         "sync", "--skill-root", str(source), "--suite-id", "suite:demo", "--workspace", str(tmp_path),
     ).stdout)
@@ -224,6 +234,50 @@ def test_sync_all_refreshes_each_explicit_suite_mapped_to_a_mixed_root(tmp_path:
 
     assert {item["suite_id"] for item in result["suites"]} == {"suite:one", "suite:two"}
     assert all(item["synchronized"] for item in result["suites"])
+
+
+def test_new_skill_in_a_mixed_root_is_imported_only_into_general(tmp_path: Path):
+    source = tmp_path / "mixed-library"
+    source.mkdir()
+    demo = source / "demo"
+    demo.mkdir()
+    (demo / "SKILL.md").write_text("---\nname: demo\n---\n", encoding="utf-8")
+    run_cli("import", str(source), "--suite-id", "suite:one", "--workspace", str(tmp_path))
+    cache = Path(json.loads(run_cli(
+        "import", str(source), "--suite-id", "suite:two", "--workspace", str(tmp_path),
+    ).stdout)["cache_dir"])
+    new_skill = source / "new-skill"
+    new_skill.mkdir()
+    (new_skill / "SKILL.md").write_text("---\nname: new-skill\n---\n", encoding="utf-8")
+
+    result = json.loads(run_cli("sync", "--skill-root", str(source), "--workspace", str(tmp_path)).stdout)
+
+    assert result["suite_id"] == "suite:general"
+    assert cache_suite_skills(cache) == {
+        "suite:one": {"demo"}, "suite:two": {"demo"}, "suite:general": {"new-skill"},
+    }
+
+
+def test_sync_all_keeps_new_mixed_root_skill_out_of_existing_suites(tmp_path: Path):
+    source = tmp_path / "mixed-library"
+    source.mkdir()
+    demo = source / "demo"
+    demo.mkdir()
+    (demo / "SKILL.md").write_text("---\nname: demo\n---\n", encoding="utf-8")
+    run_cli("import", str(source), "--suite-id", "suite:one", "--workspace", str(tmp_path))
+    cache = Path(json.loads(run_cli(
+        "import", str(source), "--suite-id", "suite:two", "--workspace", str(tmp_path),
+    ).stdout)["cache_dir"])
+    new_skill = source / "new-skill"
+    new_skill.mkdir()
+    (new_skill / "SKILL.md").write_text("---\nname: new-skill\n---\n", encoding="utf-8")
+
+    result = json.loads(run_cli("sync", "--all", "--skill-root", str(source), "--workspace", str(tmp_path)).stdout)
+
+    assert {item["suite_id"] for item in result["suites"]} == {"suite:one", "suite:two", "suite:general"}
+    assert cache_suite_skills(cache) == {
+        "suite:one": {"demo"}, "suite:two": {"demo"}, "suite:general": {"new-skill"},
+    }
 
 
 def test_sync_all_rejects_a_root_without_an_explicit_suite_mapping(tmp_path: Path):

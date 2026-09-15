@@ -661,9 +661,12 @@ def export_bundle(
     suite_id: str,
     device_knowledge: Path | None = None,
     workflows: Path | None = None,
+    include_skill_ids: set[str] | None = None,
 ) -> Path:
     """Write a portable, non-executable bundle for ontology intake."""
     skills = discover_tree(root)
+    if include_skill_ids is not None:
+        skills = [skill for skill in skills if str(skill.get("id")) in include_skill_ids]
     for skill in skills:
         skill["status"] = "draft"
     bundle = {
