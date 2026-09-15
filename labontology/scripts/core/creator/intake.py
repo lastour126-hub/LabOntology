@@ -372,7 +372,18 @@ def _replace_suite_records(existing: list[dict[str, Any]], incoming: list[dict[s
                            if relation.get("relation") == "hasContract" and relation.get("source") in removable_skills}
     shared_skills = incoming_skill_ids & other_suite_members
     for skill_id in shared_skills:
-        if existing_entities.get(skill_id, {}).get("properties") != incoming_entities_by_id.get(skill_id, {}).get("properties"):
+        existing_properties = existing_entities.get(skill_id, {}).get("properties", {})
+        incoming_properties = incoming_entities_by_id.get(skill_id, {}).get("properties", {})
+        existing_source = existing_properties.get("instruction_source", {})
+        incoming_source = incoming_properties.get("instruction_source", {})
+        # A Skill entity is global, so a changed definition is safe to merge
+        # only when both memberships point at the same source document. The
+        # caller is responsible for refreshing every owning Suite together.
+        same_source = (
+            isinstance(existing_source, dict) and isinstance(incoming_source, dict)
+            and existing_source.get("path") and existing_source.get("path") == incoming_source.get("path")
+        )
+        if existing_properties != incoming_properties and not same_source:
             raise ValueError(f"conflicting shared Skill definition: {skill_id}")
     retained = [record for record in existing if not (
         ("entity" in record and record["entity"].get("id") in {suite_id} | removable_skills | removable_contracts)

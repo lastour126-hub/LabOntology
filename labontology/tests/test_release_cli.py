@@ -74,6 +74,16 @@ def cache_and_mission(tmp_path: Path, skill_id: str, side_effect_level: str) -> 
     return cache, mission_id
 
 
+def cache_suite_skills(cache: Path) -> dict[str, set[str]]:
+    records = [json.loads(line) for line in (cache / "ontology.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    result: dict[str, set[str]] = {}
+    for record in records:
+        relation = record.get("relation", {})
+        if relation.get("relation") == "containsSkill":
+            result.setdefault(relation["source"], set()).add(relation["target"].removeprefix("skill:"))
+    return result
+
+
 def test_import_creates_and_validates_a_cache(tmp_path: Path):
     result = json.loads(run_cli(
         "import", str(make_skill_root(tmp_path)),
@@ -188,16 +198,6 @@ def test_resolve_cache_detects_a_new_source_file_and_sync_imports_it(tmp_path: P
         "resolve-cache", "--skill-root", str(source), "--suite-id", "suite:demo", "--workspace", str(tmp_path),
         check=False,
     )
-
-
-def cache_suite_skills(cache: Path) -> dict[str, set[str]]:
-    records = [json.loads(line) for line in (cache / "ontology.jsonl").read_text(encoding="utf-8").splitlines() if line]
-    result: dict[str, set[str]] = {}
-    for record in records:
-        relation = record.get("relation", {})
-        if relation.get("relation") == "containsSkill":
-            result.setdefault(relation["source"], set()).add(relation["target"].removeprefix("skill:"))
-    return result
     refreshed = json.loads(run_cli(
         "sync", "--skill-root", str(source), "--suite-id", "suite:demo", "--workspace", str(tmp_path),
     ).stdout)
@@ -258,6 +258,30 @@ def test_new_skill_in_a_mixed_root_is_imported_only_into_general(tmp_path: Path)
     }
 
 
+def test_second_new_skill_is_added_to_existing_general_without_dropping_the_first(tmp_path: Path):
+    source = tmp_path / "mixed-library"
+    source.mkdir()
+    for skill_id in ("demo",):
+        skill = source / skill_id
+        skill.mkdir()
+        (skill / "SKILL.md").write_text(f"---\nname: {skill_id}\n---\n", encoding="utf-8")
+    run_cli("import", str(source), "--suite-id", "suite:one", "--workspace", str(tmp_path))
+    run_cli("import", str(source), "--suite-id", "suite:two", "--workspace", str(tmp_path))
+    new_one = source / "new-one"
+    new_one.mkdir()
+    (new_one / "SKILL.md").write_text("---\nname: new-one\n---\n", encoding="utf-8")
+    run_cli("sync", "--skill-root", str(source), "--workspace", str(tmp_path))
+    new_two = source / "new-two"
+    new_two.mkdir()
+    (new_two / "SKILL.md").write_text("---\nname: new-two\n---\n", encoding="utf-8")
+
+    cache = Path(json.loads(run_cli(
+        "sync", "--skill-root", str(source), "--workspace", str(tmp_path),
+    ).stdout)["cache_dir"])
+
+    assert cache_suite_skills(cache)["suite:general"] == {"new-one", "new-two"}
+
+
 def test_sync_all_keeps_new_mixed_root_skill_out_of_existing_suites(tmp_path: Path):
     source = tmp_path / "mixed-library"
     source.mkdir()
@@ -278,6 +302,24 @@ def test_sync_all_keeps_new_mixed_root_skill_out_of_existing_suites(tmp_path: Pa
     assert cache_suite_skills(cache) == {
         "suite:one": {"demo"}, "suite:two": {"demo"}, "suite:general": {"new-skill"},
     }
+
+
+def test_syncing_changed_shared_skill_refreshes_all_owning_suites(tmp_path: Path):
+    source = make_skill_root(tmp_path)
+    run_cli("import", str(source), "--suite-id", "suite:one", "--workspace", str(tmp_path))
+    cache = Path(json.loads(run_cli(
+        "import", str(source), "--suite-id", "suite:two", "--workspace", str(tmp_path),
+    ).stdout)["cache_dir"])
+    (source / "SKILL.md").write_text("---\nname: demo\ndescription: changed\n---\n", encoding="utf-8")
+
+    result = json.loads(run_cli(
+        "sync", "--skill-root", str(source), "--suite-id", "suite:one", "--workspace", str(tmp_path),
+    ).stdout)
+
+    assert result["related_suites"] == ["suite:two"]
+    assert json.loads(run_cli(
+        "resolve-cache", "--skill-root", str(source), "--suite-id", "suite:two", "--workspace", str(tmp_path),
+    ).stdout)["source_integrity"]["changed"] == 0
 
 
 def test_sync_all_rejects_a_root_without_an_explicit_suite_mapping(tmp_path: Path):

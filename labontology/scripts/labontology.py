@@ -215,7 +215,7 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
 
 
 def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = None,
-                   skill_ids: set[str] | None = None) -> dict[str, Any]:
+                   skill_ids: set[str] | None = None, *, propagate_shared: bool = True) -> dict[str, Any]:
     """Refresh one explicit Suite, or safely place unclassified Skills in General."""
     skill_root = skill_root.resolve()
     cache = _workspace_cache_path(workspace)
@@ -227,7 +227,13 @@ def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = Non
         selected_suite = matched_suites[0]
     elif len(matched_suites) > 1:
         if new_skill_ids:
-            return sync_workspace(skill_root, workspace, "suite:general", skill_ids=new_skill_ids)
+            # General is an additive bucket: retain its existing members while
+            # importing only newly discovered, unclassified Skills.
+            existing_general_ids = _suite_skill_ids(cache, "suite:general")
+            return sync_workspace(
+                skill_root, workspace, "suite:general",
+                skill_ids=existing_general_ids | new_skill_ids,
+            )
         raise ValueError("Multiple existing SkillSuites own this root; specify --suite-id")
     else:
         selected_suite = "suite:general"
@@ -235,7 +241,16 @@ def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = Non
     selected_ids = skill_ids
     if selected_ids is None and len(explicit_mappings) > 1:
         selected_ids = _suite_skill_ids(cache, selected_suite)
-    current = _cache_match(cache, skill_root, selected_suite)
+    # A requested Skill set that contains IDs absent from the cached Suite is
+    # necessarily stale, even if the existing source records still match.
+    # This prevents an existing suite:general from incorrectly reusing its old
+    # cache when a new unclassified Skill was discovered.
+    cached_selected_ids = _suite_skill_ids(cache, selected_suite)
+    requested_ids = set(selected_ids or ())
+    if requested_ids - cached_selected_ids:
+        current = None
+    else:
+        current = _cache_match(cache, skill_root, selected_suite)
     if current is not None:
         return {
             "suite_id": selected_suite,
@@ -246,9 +261,28 @@ def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = Non
             "synchronized": False,
             "reused": True,
         }
+    # Skill entities are global in the unified graph. If a changed Skill is
+    # shared by multiple Suites rooted at this same library, refresh those
+    # memberships together so no Suite keeps an obsolete source hash.
+    related_suites: list[str] = []
+    if propagate_shared and current is None and selected_suite in explicit_mappings:
+        try:
+            registry = Registry.load_cache(cache)
+            selected_members = set(selected_ids or registry.suite(selected_suite).skills)
+            for owner_id in explicit_mappings:
+                if owner_id == selected_suite or owner_id not in registry.suites:
+                    continue
+                if selected_members & set(registry.suite(owner_id).skills):
+                    related_suites.append(owner_id)
+        except (FileNotFoundError, KeyError, ValueError, OSError, json.JSONDecodeError):
+            related_suites = []
     result = import_suite(skill_root, selected_suite, workspace, selected_ids)
+    for owner_id in related_suites:
+        owner_ids = _suite_skill_ids(cache, owner_id)
+        import_suite(skill_root, owner_id, workspace, owner_ids)
     manifest = json.loads((Path(result["cache_dir"]) / "cache-manifest.json").read_text(encoding="utf-8"))
-    return {**result, "suite_ids": manifest["suite_ids"], "synchronized": True, "reused": False}
+    return {**result, "suite_ids": manifest["suite_ids"], "synchronized": True, "reused": False,
+            **({"related_suites": related_suites} if related_suites else {})}
 
 
 def sync_workspace_all(skill_root: Path, workspace: Path) -> dict[str, Any]:
@@ -259,9 +293,15 @@ def sync_workspace_all(skill_root: Path, workspace: Path) -> dict[str, Any]:
         raise ValueError("--all requires an existing explicit SkillSuite mapping for this root")
     new_skill_ids = _new_skill_ids(skill_root, cache)
     results = [sync_workspace(skill_root, workspace, suite_id,
-                              skill_ids=_suite_skill_ids(cache, suite_id)) for suite_id in suite_ids]
+                              skill_ids=_suite_skill_ids(cache, suite_id),
+                              propagate_shared=False) for suite_id in suite_ids]
     if new_skill_ids:
-        results.append(sync_workspace(skill_root, workspace, "suite:general", skill_ids=new_skill_ids))
+        existing_general_ids = _suite_skill_ids(cache, "suite:general")
+        results.append(sync_workspace(
+            skill_root, workspace, "suite:general",
+            skill_ids=existing_general_ids | new_skill_ids,
+            propagate_shared=False,
+        ))
     return {"cache_dir": str(_workspace_cache_path(workspace)), "suites": results,
             "synchronized": any(result["synchronized"] for result in results)}
 
