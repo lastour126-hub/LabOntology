@@ -14,7 +14,7 @@ from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 from core import ontology as ONTOLOGY
-from core.creator.importer import export_bundle
+from core.creator.importer import discover_tree, export_bundle
 from core.creator.intake import receive_bundle
 from core.runtime import commands as runtime_commands
 from core.runtime.registry import Registry
@@ -33,7 +33,7 @@ def import_suite(skill_root: Path, suite_id: str, workspace: Path) -> dict[str, 
     with TemporaryDirectory(prefix="labontology-bundle-") as temporary:
         bundle_dir = Path(temporary)
         export_bundle(skill_root, bundle_dir, suite_id)
-        imported = receive_bundle(bundle_dir, workspace)
+        imported = receive_bundle(bundle_dir, workspace, source_root=skill_root)
 
     cache_dir = Path(imported["output_dir"])
     validation_output = io.StringIO()
@@ -86,6 +86,16 @@ def _workspace_cache_path(workspace: Path) -> Path:
 
 
 def _cached_suites_for_root(cache_dir: Path, skill_root: Path) -> list[str]:
+    manifest_path = cache_dir / "cache-manifest.json"
+    if manifest_path.is_file():
+        try:
+            suite_roots = json.loads(manifest_path.read_text(encoding="utf-8")).get("suite_roots", {})
+            exact = sorted(str(suite_id) for suite_id, root in suite_roots.items()
+                           if Path(str(root)).resolve() == skill_root)
+            if exact:
+                return exact
+        except (OSError, ValueError, json.JSONDecodeError):
+            pass
     index_path = cache_dir / "source-index.json"
     if not index_path.is_file():
         return []
@@ -96,6 +106,28 @@ def _cached_suites_for_root(cache_dir: Path, skill_root: Path) -> list[str]:
     return sorted({str(record["suite_id"]) for record in sources
                    if isinstance(record, dict) and record.get("suite_id") and record.get("path")
                    and Path(str(record["path"])).resolve().is_relative_to(skill_root)})
+
+
+def _explicit_suites_for_root(cache_dir: Path, skill_root: Path) -> list[str]:
+    manifest_path = cache_dir / "cache-manifest.json"
+    if not manifest_path.is_file():
+        return []
+    try:
+        suite_roots = json.loads(manifest_path.read_text(encoding="utf-8")).get("suite_roots", {})
+    except (OSError, ValueError, json.JSONDecodeError):
+        return []
+    if not isinstance(suite_roots, dict):
+        return []
+    return sorted(str(suite_id) for suite_id, root in suite_roots.items()
+                  if Path(str(root)).resolve() == skill_root)
+
+
+def _library_files(skill_root: Path) -> set[Path]:
+    ignored_parts = {"__pycache__", ".git", ".hg", ".svn"}
+    source_dirs = {Path(str(skill["source_dir"])).resolve() for skill in discover_tree(skill_root)
+                   if skill.get("source_dir")}
+    return {path.resolve() for source_dir in source_dirs for path in source_dir.rglob("*")
+            if path.is_file() and not any(part in ignored_parts for part in path.parts)}
 
 
 def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dict[str, Any] | None:
@@ -116,6 +148,10 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
         return None
     if suite_id and suite_id not in suite_ids:
         return None
+    suite_roots = manifest.get("suite_roots", {})
+    if suite_id:
+        if not isinstance(suite_roots, dict) or suite_roots.get(suite_id) != str(skill_root):
+            return None
     sources = index.get("sources", [])
     if not isinstance(sources, list):
         return None
@@ -126,12 +162,15 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
         source = Path(str(record["path"])).resolve()
         in_root = source.is_relative_to(skill_root)
         if suite_id:
-            if record.get("suite_id") != suite_id:
+            if record.get("suite_id") != suite_id or not in_root:
                 continue
         elif not in_root:
             continue
         scoped_sources.append((record, source))
     if not scoped_sources:
+        return None
+    known_paths = {source for _, source in scoped_sources}
+    if not _library_files(skill_root).issubset(known_paths):
         return None
     missing_sources = 0
     changed_sources = 0
@@ -184,6 +223,17 @@ def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = Non
     return {**result, "suite_ids": manifest["suite_ids"], "synchronized": True, "reused": False}
 
 
+def sync_workspace_all(skill_root: Path, workspace: Path) -> dict[str, Any]:
+    skill_root, workspace = skill_root.resolve(), workspace.resolve()
+    cache = _workspace_cache_path(workspace)
+    suite_ids = _explicit_suites_for_root(cache, skill_root)
+    if not suite_ids:
+        raise ValueError("--all requires an existing explicit SkillSuite mapping for this root")
+    results = [sync_workspace(skill_root, workspace, suite_id) for suite_id in suite_ids]
+    return {"cache_dir": str(_workspace_cache_path(workspace)), "suites": results,
+            "synchronized": any(result["synchronized"] for result in results)}
+
+
 def resolve_cache(skill_root: Path, workspace: Path, suite_id: str | None = None) -> dict[str, Any]:
     skill_root, workspace = skill_root.resolve(), workspace.resolve()
     if not skill_root.is_dir():
@@ -229,11 +279,14 @@ def mission_status(cache_dir: Path, mission_id: str) -> dict[str, Any]:
     ])
 
 
-def resume_mission(cache_dir: Path, mission_id: str, *, confirm: bool = False, reject: bool = False,
+def resume_mission(cache_dir: Path, mission_id: str, *, suite_id: str | None = None,
+                   confirm: bool = False, reject: bool = False,
                    answer: str = "", summary: str = "", evidence: list[str] | None = None,
                    provided_artifacts: list[str] | None = None, agent_completed: bool = False,
                    agent_failed: bool = False) -> dict[str, Any]:
     arguments = ["resume", "--system-dir", str(cache_dir.resolve()), "--mission-id", mission_id]
+    if suite_id:
+        arguments.extend(["--suite", suite_id])
     for flag, enabled in (("--confirm", confirm), ("--reject", reject),
                           ("--agent-completed", agent_completed), ("--agent-failed", agent_failed)):
         if enabled:
@@ -286,6 +339,10 @@ def describe_skill(cache_dir: Path, skill_id: str, suite_id: str | None = None) 
         "documentation": knowledge.get("documentation", {}),
         "unresolved": knowledge.get("unresolved", []),
         "evidence": knowledge.get("evidence", []),
+        "capability_evidence": knowledge.get("capability_evidence", []),
+        "contract_evidence": knowledge.get("contract_evidence", []),
+        "preconditions": knowledge.get("preconditions", []),
+        "decision_policy": knowledge.get("decision_policy", {}),
     }
 
 
@@ -302,7 +359,7 @@ def list_missions(cache_dir: Path, query: str | None = None) -> dict[str, Any]:
         if needle and needle not in goal.casefold() and needle not in str(state.get("mission_id", "")).casefold():
             continue
         missions.append({"mission_id": state.get("mission_id", state_path.parent.name), "goal": goal,
-                         "status": state.get("status", "unknown")})
+                         "status": state.get("status", "unknown"), "suite_id": state.get("suite_id")})
     return {"missions": missions}
 
 
@@ -347,6 +404,7 @@ def _routine_decision(cache_dir: Path, mission_id: str, skill_id: str, reason: s
 def decide_routine_action(cache_dir: Path, mission_id: str, skill_id: str, reason: str,
                           suite_id: str | None = None) -> dict[str, Any]:
     decision = _routine_decision(cache_dir, mission_id, skill_id, reason, suite_id)
+    suite, _ = _select_skill(Registry.load_cache(cache_dir.resolve()), skill_id, suite_id)
     temporary_path: Path | None = None
     try:
         with NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as handle:
@@ -354,7 +412,7 @@ def decide_routine_action(cache_dir: Path, mission_id: str, skill_id: str, reaso
             temporary_path = Path(handle.name)
         return _runtime_result([
             "act", "--system-dir", str(cache_dir.resolve()), "--mission-id", mission_id,
-            "--decision-file", str(temporary_path),
+            "--suite", suite.id, "--decision-file", str(temporary_path),
         ])
     finally:
         if temporary_path is not None:
@@ -372,6 +430,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sync_parser.add_argument("--skill-root", type=Path, required=True)
     sync_parser.add_argument("--workspace", type=Path, default=Path.cwd())
     sync_parser.add_argument("--suite-id")
+    sync_parser.add_argument("--all", action="store_true")
     resolve_parser = subparsers.add_parser("resolve-cache", help="Find a valid existing cache for a Skill directory")
     resolve_parser.add_argument("--skill-root", type=Path, required=True)
     resolve_parser.add_argument("--workspace", type=Path, default=Path.cwd())
@@ -387,6 +446,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     resume_parser = subparsers.add_parser("resume", help="Resume an Agent-mode mission")
     resume_parser.add_argument("--cache-dir", type=Path, required=True)
     resume_parser.add_argument("--mission-id", required=True)
+    resume_parser.add_argument("--suite-id")
     resume_parser.add_argument("--confirm", action="store_true")
     resume_parser.add_argument("--reject", action="store_true")
     resume_parser.add_argument("--answer", default="")
@@ -416,7 +476,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "import":
             result = import_suite(args.skill_root, args.suite_id, args.workspace)
         elif args.command == "sync":
-            result = sync_workspace(args.skill_root, args.workspace, args.suite_id)
+            if args.all and args.suite_id:
+                raise ValueError("--all cannot be combined with --suite-id")
+            result = sync_workspace_all(args.skill_root, args.workspace) if args.all else sync_workspace(args.skill_root, args.workspace, args.suite_id)
         elif args.command == "resolve-cache":
             result = resolve_cache(args.skill_root, args.workspace, args.suite_id)
         elif args.command == "inspect":
@@ -424,7 +486,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "run":
             result = run_mission(args.cache_dir, args.goal, args.mission_id, args.suite_id, args.input_artifact)
         elif args.command == "resume":
-            result = resume_mission(args.cache_dir, args.mission_id, confirm=args.confirm, reject=args.reject,
+            result = resume_mission(args.cache_dir, args.mission_id, suite_id=args.suite_id,
+                                    confirm=args.confirm, reject=args.reject,
                                     answer=args.answer, summary=args.summary, evidence=args.evidence,
                                     provided_artifacts=args.provide_artifact,
                                     agent_completed=args.agent_completed, agent_failed=args.agent_failed)

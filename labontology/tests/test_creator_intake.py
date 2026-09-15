@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import yaml
+import pytest
 
 from core.creator.intake import maintain_cache, receive_bundle
 
@@ -143,6 +144,42 @@ def test_shared_skill_can_belong_to_multiple_explicit_suites(tmp_path):
         (str((source / "SKILL.md").resolve()), "suite:one"),
         (str((source / "SKILL.md").resolve()), "suite:two"),
     }
+
+
+def test_maintenance_does_not_remove_shared_source_ownership(tmp_path):
+    source = tmp_path / "shared"
+    source.mkdir()
+    document = source / "SKILL.md"
+    document.write_text("# Shared\n", encoding="utf-8")
+    receive_bundle(bundle(tmp_path / "one", suite="suite:one", skills=[{
+        "id": "shared", "source_dir": str(source), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)
+    cache = Path(receive_bundle(bundle(tmp_path / "two", suite="suite:two", skills=[{
+        "id": "shared", "source_dir": str(source), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)["output_dir"])
+
+    maintain_cache(cache, document, skill_id="shared", note="verified source")
+
+    sources = json.loads((cache / "source-index.json").read_text(encoding="utf-8"))["sources"]
+    owners = {record.get("suite_id") for record in sources if record["path"] == str(document.resolve())}
+    assert {"suite:one", "suite:two"}.issubset(owners)
+
+
+def test_shared_skill_with_different_source_contract_is_rejected(tmp_path):
+    first_source = tmp_path / "first"
+    second_source = tmp_path / "second"
+    first_source.mkdir()
+    second_source.mkdir()
+    (first_source / "SKILL.md").write_text("# Shared v1\n", encoding="utf-8")
+    (second_source / "SKILL.md").write_text("# Shared v2\n", encoding="utf-8")
+    receive_bundle(bundle(tmp_path / "one", suite="suite:one", skills=[{
+        "id": "shared", "source_dir": str(first_source), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)
+
+    with pytest.raises(ValueError, match="conflicting shared Skill"):
+        receive_bundle(bundle(tmp_path / "two", suite="suite:two", skills=[{
+            "id": "shared", "source_dir": str(second_source), "entrypoints": [], "outputs": [], "enabled": False,
+        }]), tmp_path)
 
 
 def test_graph_preserves_explicit_workflow_as_reference(tmp_path):

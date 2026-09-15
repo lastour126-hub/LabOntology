@@ -265,7 +265,9 @@ def _graph_records(bundle: dict[str, Any]) -> tuple[list[dict[str, Any]], list[d
         ]
         properties = {"name": str(skill.get("name") or skill_id), "description": skill.get("description"), "status": str(skill.get("status") or "draft"), "validated": bool(skill.get("validated", False)), "enabled": bool(skill.get("enabled", False)), "execution_mode": runtime["execution_mode"], "runnable": runtime["runnable"], "side_effect_level": runtime["side_effect_level"], "required_capabilities": runtime["required_capabilities"], "entrypoints": [str(item) for item in _as_list(skill.get("entrypoints"))], "unresolved": list(dict.fromkeys(unresolved)), "runtime": runtime}
         properties.update(_instruction_metadata(Path(str(skill.get("source_dir") or runtime["working_dir"])), skill.get("documentation")))
-        for key in ("documentation", "knowledge_files", "capability_evidence", "recommended_next_skills", "output_mode", "decision_policy"):
+        properties["preconditions"] = list(_as_list(documentation.get("precondition_hints")))
+        for key in ("documentation", "knowledge_files", "capability_evidence", "contract_evidence",
+                    "evidence", "recommended_next_skills", "output_mode", "decision_policy"):
             if skill.get(key) not in ({}, [], None):
                 properties[key] = skill[key]
         records.extend([_entity(f"skill:{skill_id}", "Skill", properties), _relation("containsSkill", suite_id, f"skill:{skill_id}"), _entity(f"contract:compact-{_safe_name(skill_id)}", "SkillContract", {"skill_id": skill_id, "parameters": runtime["parameters"], "input_artifacts": runtime["inputs"], "outputs": runtime["outputs"]}), _relation("hasContract", f"skill:{skill_id}", f"contract:compact-{_safe_name(skill_id)}")])
@@ -356,6 +358,8 @@ def _suite_owned_ids(records: list[dict[str, Any]], suite_id: str) -> set[str]:
 
 def _replace_suite_records(existing: list[dict[str, Any]], incoming: list[dict[str, Any]], suite_id: str) -> list[dict[str, Any]]:
     relations = [record["relation"] for record in existing if "relation" in record]
+    existing_entities = {record["entity"]["id"]: record["entity"] for record in existing if "entity" in record}
+    incoming_entities_by_id = {record["entity"]["id"]: record["entity"] for record in incoming if "entity" in record}
     old_skill_ids = {relation["target"] for relation in relations
                      if relation.get("relation") == "containsSkill" and relation.get("source") == suite_id}
     incoming_skill_ids = {record["relation"]["target"] for record in incoming
@@ -366,6 +370,10 @@ def _replace_suite_records(existing: list[dict[str, Any]], incoming: list[dict[s
     removable_skills = old_skill_ids - incoming_skill_ids - other_suite_members
     removable_contracts = {relation["target"] for relation in relations
                            if relation.get("relation") == "hasContract" and relation.get("source") in removable_skills}
+    shared_skills = incoming_skill_ids & other_suite_members
+    for skill_id in shared_skills:
+        if existing_entities.get(skill_id, {}).get("properties") != incoming_entities_by_id.get(skill_id, {}).get("properties"):
+            raise ValueError(f"conflicting shared Skill definition: {skill_id}")
     retained = [record for record in existing if not (
         ("entity" in record and record["entity"].get("id") in {suite_id} | removable_skills | removable_contracts)
         or ("relation" in record and (
@@ -443,17 +451,22 @@ def _write_compact_cache(cache: Path, bundle: dict[str, Any]) -> list[str]:
     suite_ids = sorted(record["entity"]["id"] for record in records
                        if record.get("entity", {}).get("type") == "SkillSuite")
     timestamp = _now()
+    suite_roots = {str(key): value for key, value in dict(existing_manifest.get("suite_roots", {})).items()
+                   if str(key) in suite_ids}
+    source_root = bundle.get("_source_root")
+    if source_root:
+        suite_roots[suite_id] = str(Path(str(source_root)).resolve())
     manifest = {"schema": CACHE_SCHEMA, "suite_ids": suite_ids,
                 "created_at": existing_manifest.get("created_at", timestamp), "updated_at": timestamp,
                 "cache_format": "graph-v1", "entity_count": sum("entity" in item for item in records),
-                "relation_count": sum("relation" in item for item in records)}
+                "relation_count": sum("relation" in item for item in records), "suite_roots": suite_roots}
     (staging / "cache-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if cache.exists():
         shutil.rmtree(cache)
     staging.replace(cache)
     return suite_ids
 
-def receive_bundle(bundle_dir: Path, workdir: Path | None = None) -> dict[str, Any]:
+def receive_bundle(bundle_dir: Path, workdir: Path | None = None, source_root: Path | None = None) -> dict[str, Any]:
     bundle_dir = Path(bundle_dir).resolve()
     payload_path = bundle_dir / "skills.json"
     if not payload_path.is_file():
@@ -465,11 +478,14 @@ def receive_bundle(bundle_dir: Path, workdir: Path | None = None) -> dict[str, A
     if not isinstance(suite_id, str) or not suite_id:
         raise ValueError("bundle suite_id is required")
     bundle["_bundle_dir"] = str(bundle_dir)
+    if source_root is not None:
+        bundle["_source_root"] = str(Path(source_root).resolve())
     cache = Path(workdir or Path.cwd()).resolve() / "labontology_workspace_cache"
     suite_ids = _write_compact_cache(cache, bundle)
     return {"output_dir": str(cache), "cache_format": "graph-v1", "suite_id": suite_id, "suite_ids": suite_ids}
 
-def maintain_cache(cache_dir: Path, source: Path, *, kind: str = "knowledge", skill_id: str | None = None, note: str | None = None) -> dict[str, Any]:
+def maintain_cache(cache_dir: Path, source: Path, *, kind: str = "knowledge", skill_id: str | None = None,
+                   note: str | None = None, suite_id: str | None = None) -> dict[str, Any]:
     if kind not in MAINTAINABLE_KINDS:
         raise ValueError(f"unsupported maintenance kind: {kind}")
     cache, source = Path(cache_dir).resolve(), Path(source).resolve()
@@ -480,7 +496,11 @@ def maintain_cache(cache_dir: Path, source: Path, *, kind: str = "knowledge", sk
         raise FileNotFoundError("cache must contain ontology.jsonl and source-index.json")
     role = {"knowledge": "knowledge", "device": "device_knowledge", "workflow": "workflow"}[kind]
     index = json.loads(index_path.read_text(encoding="utf-8"))
-    index["sources"] = [item for item in index.get("sources", []) if item.get("path") != str(source)] + [_source_record(source, [role], skill_id, note)]
+    record = _source_record(source, [role], skill_id, note)
+    if suite_id:
+        record["suite_id"] = suite_id
+    index["sources"] = [item for item in index.get("sources", [])
+                        if not (item.get("path") == str(source) and item.get("suite_id") == suite_id)] + [record]
     index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     manifest_path = cache / "cache-manifest.json"
     if manifest_path.is_file():

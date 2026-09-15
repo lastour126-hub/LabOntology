@@ -393,6 +393,21 @@ def test_context_ranks_chinese_goal_against_skill_metadata_without_expanding_car
     assert len(context["skills"]) == 2
 
 
+def test_context_ranks_and_displays_a_chinese_skill_name(tmp_path):
+    relevant = SkillSpec("reaction-plan", [], execution_mode="agent")
+    unrelated = SkillSpec("aaa-unrelated", [], execution_mode="agent")
+    runtime = controller(tmp_path, [unrelated, relevant], skill_knowledge={
+        "reaction-plan": {"name": "氢化反应规划", "description": "实验规划"},
+        "aaa-unrelated": {"name": "库存整理", "description": "实验规划"},
+    })
+    runtime.start("执行氢化反应规划")
+
+    context = runtime.context()
+
+    assert context["skills"][0]["id"] == "reaction-plan"
+    assert context["skills"][0]["name"] == "氢化反应规划"
+
+
 def test_factual_answer_replans_without_requiring_an_approval_flag(tmp_path):
     runtime = controller(tmp_path, [SkillSpec("device", [sys.executable, "-c", "print('no')"])])
     runtime.start("Measure")

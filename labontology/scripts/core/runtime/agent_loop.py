@@ -39,12 +39,14 @@ class AgentRuntime:
         policies: list[ExecutionPolicySpec] | None = None,
         skill_knowledge: dict[str, dict[str, Any]] | None = None,
         workflow_references: list[dict[str, Any]] | None = None,
+        suite_id: str | None = None,
     ):
         self.skills, self.invoker, self.store = skills, invoker, store
         self.capabilities = set(available_capabilities or [])
         self.policies = policies or []
         self.knowledge = skill_knowledge or {}
         self.workflows = workflow_references or []
+        self.suite_id = suite_id
 
     def _load(self) -> MissionState:
         state = self.store.load()
@@ -52,6 +54,12 @@ class AgentRuntime:
             raise ValueError("Mission is not an Agent mission; create a new Agent mission")
         self.capabilities.update(state.available_capabilities)
         state.available_capabilities = sorted(self.capabilities)
+        if self.suite_id:
+            if state.suite_id and state.suite_id != self.suite_id:
+                raise ValueError("Mission belongs to a different SkillSuite")
+            if not state.suite_id:
+                state.suite_id = self.suite_id
+                self.store.save(state)
         return state
 
     def start(self, goal: str, *, constraints: list[str] | None = None,
@@ -69,7 +77,8 @@ class AgentRuntime:
         state = MissionState(self.store.mission_id, status="awaiting_decision", mode="agent",
                              goal=goal, constraints=list(constraints or []),
                              available_capabilities=sorted(self.capabilities),
-                             artifacts=_artifact_paths(artifacts or {}), start_skill=start_skill)
+                             artifacts=_artifact_paths(artifacts or {}), start_skill=start_skill,
+                             suite_id=self.suite_id)
         self.store.save(state)
         self.store.event("mission_created", {"goal": goal, "mode": "agent"})
         return state
@@ -80,13 +89,14 @@ class AgentRuntime:
         goal_terms = _search_terms(state.goal)
         for skill in self.skills.values():
             knowledge = self.knowledge.get(skill.id, {})
+            name = str(knowledge.get("name") or skill.id)
             description = str(knowledge.get("description") or "")
-            searchable = f"{skill.id} {description} {' '.join(skill.goal_types)} {' '.join(skill.triggers)} {' '.join(skill.required_capabilities)} {' '.join(skill.input_artifacts)}".lower()
+            searchable = f"{skill.id} {name} {description} {' '.join(skill.goal_types)} {' '.join(skill.triggers)} {' '.join(skill.required_capabilities)} {' '.join(skill.input_artifacts)}".lower()
             searchable_terms = _search_terms(searchable)
             score = sum(term in searchable_terms for term in goal_terms)
             card = {
                 "id": skill.id,
-                "name": skill.id,
+                "name": name,
                 "description": description,
                 "suite_id": knowledge.get("suite_id"),
                 "inputs": list(skill.input_artifacts),

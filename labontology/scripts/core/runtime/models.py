@@ -98,6 +98,7 @@ class MissionState:
     pending_action: dict[str, Any] | None = None
     available_capabilities: list[str] = field(default_factory=list)
     start_skill: str | None = None
+    suite_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -114,6 +115,7 @@ class MissionState:
             "pending_action": self.pending_action,
             "available_capabilities": self.available_capabilities,
             "start_skill": self.start_skill,
+            "suite_id": self.suite_id,
         }
 
     @classmethod
@@ -132,4 +134,5 @@ class MissionState:
             pending_action=data.get("pending_action"),
             available_capabilities=list(data.get("available_capabilities", [])),
             start_skill=data.get("start_skill"),
+            suite_id=data.get("suite_id"),
         )

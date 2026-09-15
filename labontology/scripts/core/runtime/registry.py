@@ -176,9 +176,14 @@ class Registry:
                     "recommended_next_skills": props.get("recommended_next_skills", []),
                 }, system_dir)
                 knowledge[skill_key] = {
+                    "name": props.get("name", skill_key),
                     "description": props.get("description"),
                     "unresolved": props.get("unresolved", []),
                     "evidence": props.get("evidence", []),
+                    "capability_evidence": props.get("capability_evidence", []),
+                    "contract_evidence": props.get("contract_evidence", []),
+                    "preconditions": props.get("preconditions", []),
+                    "decision_policy": props.get("decision_policy", {}),
                     "confidence": props.get("confidence"),
                     "documentation": props.get("documentation", {}),
                     "instruction_source": props.get("instruction_source"),

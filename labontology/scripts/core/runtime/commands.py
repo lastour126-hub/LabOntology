@@ -69,7 +69,7 @@ def build_agent_runtime(args: argparse.Namespace) -> AgentRuntime:
     return AgentRuntime(
         skills, SkillInvoker(), _mission_store(args),
         available_capabilities=set(args.capability).union(*(suite.available_capabilities for suite in suites)), policies=policies,
-        skill_knowledge=knowledge, workflow_references=workflows,
+        skill_knowledge=knowledge, workflow_references=workflows, suite_id=args.suite,
     )
 
 
@@ -127,6 +127,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     else:
         store = _mission_store(args)
         existing = store.load() if store.state_path.exists() else None
+        if existing and existing.suite_id:
+            if args.suite and args.suite != existing.suite_id:
+                raise ValueError("Mission belongs to a different SkillSuite")
+            args.suite = existing.suite_id
         runtime = build_agent_runtime(args)
         if args.command == "run":
             runtime.start(args.goal, constraints=args.constraint,
