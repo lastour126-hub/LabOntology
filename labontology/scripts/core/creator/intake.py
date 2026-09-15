@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 
 BUNDLE_SCHEMA = "labontology.skill-bundle.v1"
-CACHE_SCHEMA = "labontology.graph-cache.v1"
+CACHE_SCHEMA = "labontology.workspace-cache.v1"
 MAINTAINABLE_KINDS = frozenset({"knowledge", "device", "workflow"})
 
 def _now() -> str:
@@ -326,12 +326,85 @@ def _graph_records(bundle: dict[str, Any]) -> tuple[list[dict[str, Any]], list[d
             relations.setdefault(relation["id"], relation)
     return ([{"entity": entity} for entity in entities.values()] + [{"relation": relation} for relation in relations.values()], list(merged.values()))
 
-def _write_compact_cache(cache: Path, bundle: dict[str, Any]) -> None:
+def _read_cache_records(cache: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    if not cache.is_dir():
+        return [], [], {}
+    graph_path, index_path, manifest_path = cache / "ontology.jsonl", cache / "source-index.json", cache / "cache-manifest.json"
+    if not (graph_path.is_file() and index_path.is_file() and manifest_path.is_file()):
+        raise ValueError(f"workspace cache is incomplete: {cache}")
+    records = [json.loads(line) for line in graph_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema") != CACHE_SCHEMA:
+        raise ValueError(f"workspace cache has unsupported schema: {manifest.get('schema')!r}")
+    return records, list(index.get("sources", [])), manifest
+
+
+def _suite_owned_ids(records: list[dict[str, Any]], suite_id: str) -> set[str]:
+    relations = [record["relation"] for record in records if "relation" in record]
+    owned = {suite_id}
+    skills = {relation["target"] for relation in relations
+              if relation.get("relation") == "containsSkill" and relation.get("source") == suite_id}
+    flows = {relation["target"] for relation in relations
+             if relation.get("relation") == "providesSkillFlow" and relation.get("source") == suite_id}
+    contracts = {relation["target"] for relation in relations
+                 if relation.get("relation") == "hasContract" and relation.get("source") in skills}
+    nodes = {relation["target"] for relation in relations
+             if relation.get("relation") == "hasNode" and relation.get("source") in flows}
+    return owned | skills | flows | contracts | nodes
+
+
+def _replace_suite_records(existing: list[dict[str, Any]], incoming: list[dict[str, Any]], suite_id: str) -> list[dict[str, Any]]:
+    owned = _suite_owned_ids(existing, suite_id)
+    retained = [record for record in existing if not (
+        ("entity" in record and record["entity"].get("id") in owned)
+        or ("relation" in record and (record["relation"].get("source") in owned or record["relation"].get("target") in owned))
+    )]
+    retained_entities = {record["entity"]["id"] for record in retained if "entity" in record}
+    incoming_entities = {record["entity"]["id"] for record in incoming if "entity" in record}
+    conflicts = sorted((retained_entities & incoming_entities) - {
+        entity_id for entity_id in retained_entities & incoming_entities if entity_id.startswith("artifact-type:")
+    })
+    if conflicts:
+        raise ValueError(f"duplicate entity IDs across SkillSuites: {conflicts}")
+    entities: dict[str, dict[str, Any]] = {}
+    relations: dict[str, dict[str, Any]] = {}
+    for record in retained + incoming:
+        if "entity" in record:
+            entity = record["entity"]
+            previous = entities.get(entity["id"])
+            if previous is None:
+                entities[entity["id"]] = entity
+            else:
+                previous.setdefault("properties", {}).update(entity.get("properties", {}))
+        else:
+            relation = record["relation"]
+            relations[relation["id"]] = relation
+    return ([{"entity": entity} for entity in entities.values()]
+            + [{"relation": relation} for relation in relations.values()])
+
+
+def _merge_sources(existing: list[dict[str, Any]], incoming: list[dict[str, Any]], suite_id: str) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {
+        str(record["path"]): record for record in existing
+        if isinstance(record, dict) and record.get("path") and record.get("suite_id") != suite_id
+    }
+    for record in incoming:
+        merged[str(record["path"])] = record
+    return list(merged.values())
+
+
+def _write_compact_cache(cache: Path, bundle: dict[str, Any]) -> list[str]:
     staging = cache.parent / f".{cache.name}-graph-build"
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
+    existing_records, existing_sources, existing_manifest = _read_cache_records(cache)
     records, sources = _graph_records(bundle)
+    suite_id = str(bundle["suite_id"])
+    records = _replace_suite_records(existing_records, records, suite_id)
+    sources = [{**source, "suite_id": suite_id} for source in sources]
+    sources = _merge_sources(existing_sources, sources, suite_id)
     existing_runs = cache / "runs"
     if existing_runs.is_dir():
         shutil.copytree(existing_runs, staging / "runs")
@@ -339,12 +412,18 @@ def _write_compact_cache(cache: Path, bundle: dict[str, Any]) -> None:
         (staging / "runs").mkdir()
     (staging / "ontology.jsonl").write_text("\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n", encoding="utf-8")
     (staging / "source-index.json").write_text(json.dumps({"schema": "labontology.source-index.v1", "sources": sources}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    suite_ids = sorted(record["entity"]["id"] for record in records
+                       if record.get("entity", {}).get("type") == "SkillSuite")
     timestamp = _now()
-    manifest = {"schema": CACHE_SCHEMA, "suite_id": bundle["suite_id"], "created_at": timestamp, "updated_at": timestamp, "cache_format": "graph-v1", "entity_count": sum("entity" in item for item in records), "relation_count": sum("relation" in item for item in records)}
+    manifest = {"schema": CACHE_SCHEMA, "suite_ids": suite_ids,
+                "created_at": existing_manifest.get("created_at", timestamp), "updated_at": timestamp,
+                "cache_format": "graph-v1", "entity_count": sum("entity" in item for item in records),
+                "relation_count": sum("relation" in item for item in records)}
     (staging / "cache-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if cache.exists():
         shutil.rmtree(cache)
     staging.replace(cache)
+    return suite_ids
 
 def receive_bundle(bundle_dir: Path, workdir: Path | None = None) -> dict[str, Any]:
     bundle_dir = Path(bundle_dir).resolve()
@@ -358,9 +437,9 @@ def receive_bundle(bundle_dir: Path, workdir: Path | None = None) -> dict[str, A
     if not isinstance(suite_id, str) or not suite_id:
         raise ValueError("bundle suite_id is required")
     bundle["_bundle_dir"] = str(bundle_dir)
-    cache = Path(workdir or Path.cwd()).resolve() / f"labontology_{_safe_name(suite_id.removeprefix('suite:'))}_skill_cache"
-    _write_compact_cache(cache, bundle)
-    return {"output_dir": str(cache), "cache_format": "graph-v1", "suite_id": suite_id}
+    cache = Path(workdir or Path.cwd()).resolve() / "labontology_workspace_cache"
+    suite_ids = _write_compact_cache(cache, bundle)
+    return {"output_dir": str(cache), "cache_format": "graph-v1", "suite_id": suite_id, "suite_ids": suite_ids}
 
 def maintain_cache(cache_dir: Path, source: Path, *, kind: str = "knowledge", skill_id: str | None = None, note: str | None = None) -> dict[str, Any]:
     if kind not in MAINTAINABLE_KINDS:

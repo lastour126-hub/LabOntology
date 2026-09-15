@@ -38,6 +38,28 @@ def test_receive_bundle_writes_compact_cache_and_runtime_contract(tmp_path):
     assert any("entrypoint" in x["roles"] for x in json.loads((cache / "source-index.json").read_text())["sources"])
 
 
+def test_receive_bundle_merges_suites_into_one_workspace_cache(tmp_path):
+    first = receive_bundle(bundle(tmp_path / "fdu", suite="suite:fdu", skills=[{
+        "id": "fdu-reader", "source_dir": str(tmp_path), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)
+    second = receive_bundle(bundle(tmp_path / "ib", suite="suite:ib", skills=[{
+        "id": "ib-reader", "source_dir": str(tmp_path), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)
+
+    cache = Path(first["output_dir"])
+    assert cache == Path(second["output_dir"])
+    assert cache.name == "labontology_workspace_cache"
+    manifest = json.loads((cache / "cache-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schema"] == "labontology.workspace-cache.v1"
+    assert manifest["suite_ids"] == ["suite:fdu", "suite:ib"]
+    suites = {
+        record["entity"]["id"]
+        for record in read_graph(cache)
+        if record.get("entity", {}).get("type") == "SkillSuite"
+    }
+    assert suites == {"suite:fdu", "suite:ib"}
+
+
 def test_import_records_skill_document_hash_and_actionable_digest(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
@@ -90,12 +112,15 @@ def test_compact_reimport_preserves_runtime_mission_records(tmp_path):
     assert (cache / "runs" / "mission-1" / "state.json").read_text(encoding="utf-8") == '{"status": "awaiting_decision"}'
 
 
-def test_each_suite_gets_a_separate_compact_cache(tmp_path):
-    first = receive_bundle(bundle(tmp_path / "one", suite="suite:one"), tmp_path)
-    second = receive_bundle(bundle(tmp_path / "two", suite="suite:two"), tmp_path)
-    assert first["output_dir"] != second["output_dir"]
+def test_each_suite_reuses_the_workspace_cache(tmp_path):
+    first = receive_bundle(bundle(tmp_path / "one", suite="suite:one", skills=[{
+        "id": "one-reader", "source_dir": str(tmp_path), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)
+    second = receive_bundle(bundle(tmp_path / "two", suite="suite:two", skills=[{
+        "id": "two-reader", "source_dir": str(tmp_path), "entrypoints": [], "outputs": [], "enabled": False,
+    }]), tmp_path)
+    assert first["output_dir"] == second["output_dir"]
     assert (Path(first["output_dir"]) / "ontology.jsonl").exists()
-    assert (Path(second["output_dir"]) / "ontology.jsonl").exists()
 
 
 def test_graph_preserves_explicit_workflow_as_reference(tmp_path):
