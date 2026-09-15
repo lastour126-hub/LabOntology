@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shutil
 from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
@@ -20,6 +21,24 @@ def _artifact_paths(artifacts: dict[str, str]) -> dict[str, str]:
         if not path.exists():
             raise ValueError(f"Artifact does not exist: {name}={path}")
         result[name] = str(path)
+    return result
+
+
+def _materialize_artifacts(artifacts: dict[str, str], artifact_dir: Path) -> dict[str, str]:
+    """Copy Agent-provided outputs into the mission-owned artifact directory."""
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    result: dict[str, str] = {}
+    for artifact_id, source_value in artifacts.items():
+        source = Path(source_value).resolve()
+        safe_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", artifact_id.split(":", 1)[-1]).strip("._") or "artifact"
+        destination = artifact_dir / f"{safe_id}__{source.name}"
+        if source != destination.resolve():
+            if source.is_dir():
+                shutil.copytree(source, destination, dirs_exist_ok=True)
+            else:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+        result[artifact_id] = str(destination)
     return result
 
 
@@ -85,6 +104,8 @@ class AgentRuntime:
 
     def context(self) -> dict[str, Any]:
         state = self._load()
+        artifact_dir = self.store.run_dir / "artifacts"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
         cards: list[tuple[int, dict[str, Any]]] = []
         goal_terms = _search_terms(state.goal)
         for skill in self.skills.values():
@@ -122,6 +143,7 @@ class AgentRuntime:
                     "retry_count": execution.get("retry_count", 0),
                 })
         return {"mission": state.to_dict(), "skills": candidates, "candidate_count": len(self.skills),
+                "artifact_dir": str(artifact_dir),
                 "available_capabilities": sorted(self.capabilities),
                 "start_skill": state.start_skill,
                 "retry_candidates": retry_candidates,
@@ -340,7 +362,7 @@ class AgentRuntime:
         snapshot = action.get("skill_snapshot")
         if snapshot is not None and snapshot != self._skill_snapshot(skill):
             raise ValueError("Selected Skill changed during interruption; cannot reconcile its contract")
-        outputs = _artifact_paths(provided_artifacts or {})
+        outputs = _materialize_artifacts(_artifact_paths(provided_artifacts or {}), self.store.run_dir / "artifacts")
         if outcome == "succeeded":
             missing = sorted(set(skill.outputs) - outputs.keys())
             if missing:
@@ -402,7 +424,7 @@ class AgentRuntime:
                 "id": state.pending_action["id"], "skill_id": skill.id, "status": "failed",
                 "outputs": {}, "error": summary, "evidence": evidence or []}
             return self._observe(state, "failed", summary, evidence=evidence or [])
-        outputs = _artifact_paths(provided_artifacts or {})
+        outputs = _materialize_artifacts(_artifact_paths(provided_artifacts or {}), self.store.run_dir / "artifacts")
         missing = sorted(set(skill.outputs) - outputs.keys())
         if missing:
             raise ValueError(f"Required Agent outputs missing: {missing}")

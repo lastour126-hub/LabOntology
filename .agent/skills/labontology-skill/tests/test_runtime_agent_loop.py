@@ -41,6 +41,34 @@ def test_knowledge_agent_without_artifacts_returns_to_decision_and_can_be_reused
     assert len(reloaded["mission"]["decisions"]) == 2
 
 
+def test_agent_context_exposes_a_task_artifact_directory(tmp_path):
+    runtime = controller(tmp_path, [SkillSpec("lookup", [], execution_mode="agent")])
+    runtime.start("Create a report")
+
+    context = runtime.context()
+
+    artifact_dir = Path(context["artifact_dir"])
+    assert artifact_dir == runtime.store.run_dir / "artifacts"
+    assert artifact_dir.is_dir()
+
+
+def test_agent_outputs_are_copied_into_the_task_artifact_directory(tmp_path):
+    source = tmp_path / "desktop" / "plan.md"
+    source.parent.mkdir()
+    source.write_text("plan", encoding="utf-8")
+    skill = SkillSpec("planner", [], execution_mode="agent", outputs={"artifact:plan": "plan.md"})
+    runtime = controller(tmp_path, [skill])
+    runtime.start("Create a plan")
+    runtime.decide(choose("planner"))
+
+    state = runtime.resume(agent_completed=True, provided_artifacts={"artifact:plan": str(source)})
+
+    stored = Path(state.artifacts["artifact:plan"])
+    assert stored.parent == runtime.store.run_dir / "artifacts"
+    assert stored.read_text(encoding="utf-8") == "plan"
+    assert source.is_file()
+
+
 def test_process_runs_one_chosen_action_without_a_flow(tmp_path):
     skills = [SkillSpec(name, [sys.executable, "-c", "print('observed')"])
               for name in ["knowledge", "device"]]

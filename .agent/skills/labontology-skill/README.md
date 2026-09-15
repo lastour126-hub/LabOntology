@@ -62,6 +62,8 @@ python scripts/labontology.py status --cache-dir ..\..\..\labontology_workspace_
 
 `sync` returns the workspace cache and confirms that its graph is valid. `inspect` reports every Suite, available capabilities, graph size, and source freshness. `run` returns a new `mission_id` and the Runtime context; it does not execute a laboratory action by itself. Add `--input-artifact <name>=<path>` to attach a task spreadsheet or other task input. `status` and `resume` read or continue the mission record persisted beneath `<cache-dir>/runs`.
 
+Generated plans, protocol files, submission records, and other Agent outputs are stored under `<cache-dir>/runs/<mission-id>/artifacts`. Input files such as a spreadsheet are referenced in place and are not moved.
+
 ## Routine read-only actions
 
 After an Agent has reviewed the `run` context and selected an eligible process Skill, use:
