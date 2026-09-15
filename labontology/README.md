@@ -19,6 +19,8 @@ The Agent selects the workflow internally, checks the available procedures and t
 
 Responses are written for experiment users rather than developers: the result comes first, followed by the next action or the one missing condition. Technical terms such as cache paths and Suite IDs appear only when maintaining or troubleshooting the workflow library.
 
+When you describe the experimental sequence in conversation, the Agent turns it into a short proposed flow and asks you to confirm the order. Confirmed steps are treated as workflow evidence; unrelated Skills in the same project are not automatically combined into one procedure.
+
 Typical conversations:
 
 - “准备条件已检查完成；目前只缺少离心机可用性确认。”

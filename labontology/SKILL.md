@@ -35,6 +35,8 @@ Inspect the available procedures and start or resume a task for the stated goal.
 
 Example: “我找到样品处理流程。当前缺少离心机可用性确认；补充后我会继续检查下一项。”
 
+When the user describes experimental steps in natural language, treat that description as the primary flow input. Extract the proposed steps and matching Skills, show a short draft sequence, and ask for confirmation before treating it as a formal flow. Do not infer one complete flow merely because several Skills share a Suite.
+
 ### Check readiness or progress
 
 Check the workflow library and any existing task. Report only the relevant procedures, source freshness, missing conditions, and current progress.
@@ -44,6 +46,8 @@ Example: “昨天的任务停在等待确认，已保留此前的输入和结�
 ### Maintain the workflow library
 
 When the user explicitly adds, updates, refreshes, or asks to validate laboratory procedures, synchronize the workspace graph and report whether it is complete and valid. Technical paths and cache details are appropriate in this situation. Do not treat a spreadsheet, sample description, reagent list, or other task input as a workflow-library update.
+
+If the user supplies or confirms a sequence, preserve its wording and order as user-confirmed workflow evidence. If no sequence or dependency is available, keep the Skills as a searchable collection rather than presenting an inferred execution order.
 
 ### Request an action
 

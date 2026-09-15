@@ -195,6 +195,15 @@ def test_graph_preserves_explicit_workflow_as_reference(tmp_path):
     assert any(x.get("entity", {}).get("type") == "SkillFlow" for x in graph)
 
 
+def test_graph_does_not_invent_one_flow_for_unrelated_skills(tmp_path):
+    cache = Path(receive_bundle(bundle(tmp_path, skills=[
+        {"id": "alpha", "source_dir": str(tmp_path), "entrypoints": [], "outputs": [], "enabled": False},
+        {"id": "beta", "source_dir": str(tmp_path), "entrypoints": [], "outputs": [], "enabled": False},
+    ]), tmp_path)["output_dir"])
+
+    assert not any(x.get("entity", {}).get("type") == "SkillFlow" for x in read_graph(cache))
+
+
 def test_import_binds_a_single_declared_output_to_output_parameter(tmp_path):
     source = tmp_path / "source"
     source.mkdir()

@@ -207,9 +207,16 @@ def _workflow_records(skills: list[dict[str, Any]], workflows: list[dict[str, An
     """Store workflow knowledge as a reference, never as a scheduler instruction."""
     known = {_skill_id(skill) for skill in skills}
     if not workflows:
+        dependencies = dependencies or {}
+        # Do not turn an arbitrary Suite into one giant pseudo-workflow. Only
+        # infer a Flow when there is at least one explicit dependency edge;
+        # otherwise the Skills remain an un-ordered catalog for Agent search.
+        if not any(dependencies.get(_skill_id(skill)) for skill in skills):
+            return []
         workflows = [{"id": f"flow:{_safe_name(suite_id)}", "nodes": [
-            {"id": _skill_id(skill), "skill": _skill_id(skill), "depends_on": (dependencies or {}).get(_skill_id(skill), _as_list(skill.get("dependencies")))}
+            {"id": _skill_id(skill), "skill": _skill_id(skill), "depends_on": dependencies.get(_skill_id(skill), [])}
             for skill in sorted(skills, key=_skill_id)
+            if dependencies.get(_skill_id(skill)) or any(_skill_id(skill) in values for values in dependencies.values())
         ], "inferred": True}]
     records: list[dict[str, Any]] = []
     for workflow in workflows:
@@ -217,7 +224,13 @@ def _workflow_records(skills: list[dict[str, Any]], workflows: list[dict[str, An
         if not flow_id.startswith("flow:"):
             flow_id = f"flow:{_safe_name(flow_id)}"
         inferred = bool(workflow.get("inferred", not workflow.get("nodes")))
-        records.append(_entity(flow_id, "SkillFlow", {"name": str(workflow.get("name") or f"{suite_id} workflow reference"), "status": "reference_only", "inferred": inferred, "inference_basis": _as_list(workflow.get("inference_basis")) or ["declared workflow" if not inferred else "Skill metadata"]}))
+        records.append(_entity(flow_id, "SkillFlow", {
+            "name": str(workflow.get("name") or f"{suite_id} workflow reference"),
+            "status": "reference_only", "inferred": inferred,
+            "confidence": 0.6 if inferred else 1.0,
+            "user_confirmed": bool(workflow.get("user_confirmed", not inferred)),
+            "inference_basis": _as_list(workflow.get("inference_basis")) or ["declared workflow" if not inferred else "Skill dependency metadata"],
+        }))
         nodes = [node for node in _as_list(workflow.get("nodes")) if isinstance(node, dict)]
         for node in nodes:
             skill_id = str(node.get("skill") or node.get("skill_id") or "")
