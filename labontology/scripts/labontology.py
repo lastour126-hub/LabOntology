@@ -33,13 +33,16 @@ def import_suite(skill_root: Path, suite_id: str, workspace: Path) -> dict[str, 
         valid = ONTOLOGY.validate(system_dir=cache_dir) == 0
     if not valid:
         raise ValueError(validation_output.getvalue().strip() or "Imported graph is invalid")
-    entities, _ = ONTOLOGY.load_graph(cache_dir / "ontology.jsonl")
+    entities, relations = ONTOLOGY.load_graph(cache_dir / "ontology.jsonl")
     if not any(entity.get("type") == "SkillSuite" for entity in entities.values()):
         raise ValueError("Imported graph contains no SkillSuite")
     return {
         "suite_id": imported["suite_id"],
         "cache_dir": str(cache_dir),
-        "skill_count": sum(entity.get("type") == "Skill" for entity in entities.values()),
+        "skill_count": sum(
+            relation.get("relation") == "containsSkill" and relation.get("source") == suite_id
+            for relation in relations
+        ),
         "validation": {"graphs": 1, "valid": True},
     }
 
@@ -47,42 +50,31 @@ def import_suite(skill_root: Path, suite_id: str, workspace: Path) -> dict[str, 
 def inspect_cache(cache_dir: Path) -> dict[str, Any]:
     cache_dir = cache_dir.resolve()
     registry = Registry.load_cache(cache_dir)
-    if len(registry.suites) != 1:
-        raise ValueError("Release inspection requires exactly one suite per cache")
-    suite = next(iter(registry.suites.values()))
     entities, relations = ONTOLOGY.load_graph(cache_dir / "ontology.jsonl")
     index = json.loads((cache_dir / "source-index.json").read_text(encoding="utf-8"))
     sources = index.get("sources", [])
     missing = sum(not Path(record["path"]).is_file() for record in sources if record.get("path"))
-    return {
-        "suite_id": suite.id,
-        "skill_count": len(suite.skills),
-        "capabilities": sorted(suite.available_capabilities),
+    changed = sum(
+        Path(record["path"]).is_file()
+        and record.get("sha256") != hashlib.sha256(Path(record["path"]).read_bytes()).hexdigest()
+        for record in sources if record.get("path") and record.get("sha256")
+    )
+    suites = [{"suite_id": suite.id, "skill_count": len(suite.skills)}
+              for suite in sorted(registry.suites.values(), key=lambda suite: suite.id)]
+    result = {
+        "suites": suites,
+        "capabilities": sorted({capability for suite in registry.suites.values()
+                                 for capability in suite.available_capabilities}),
         "graph": {"entities": len(entities), "relations": len(relations)},
-        "source_integrity": {"records": len(sources), "missing": missing},
+        "source_integrity": {"records": len(sources), "missing": missing, "changed": changed},
     }
+    if len(suites) == 1:
+        result.update({"suite_id": suites[0]["suite_id"], "skill_count": suites[0]["skill_count"]})
+    return result
 
 
-def _cache_roots(skill_root: Path, workspace: Path) -> list[Path]:
-    roots = [workspace, workspace / "output", skill_root, skill_root.parent]
-    unique: list[Path] = []
-    for root in roots:
-        resolved = root.resolve()
-        if resolved not in unique:
-            unique.append(resolved)
-    return unique
-
-
-def _cache_candidates(skill_root: Path, workspace: Path) -> list[Path]:
-    candidates: list[Path] = []
-    for root in _cache_roots(skill_root, workspace):
-        if not root.is_dir():
-            continue
-        for candidate in root.glob("labontology_*_skill_cache"):
-            resolved = candidate.resolve()
-            if resolved.is_dir() and resolved not in candidates:
-                candidates.append(resolved)
-    return candidates
+def _workspace_cache_path(workspace: Path) -> Path:
+    return workspace.resolve() / "labontology_workspace_cache"
 
 
 def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dict[str, Any] | None:
@@ -96,9 +88,12 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
         index = json.loads(index_path.read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
         return None
-    if manifest.get("schema") != "labontology.graph-cache.v1":
+    if manifest.get("schema") != "labontology.workspace-cache.v1":
         return None
-    if suite_id and manifest.get("suite_id") != suite_id:
+    suite_ids = manifest.get("suite_ids", [])
+    if not isinstance(suite_ids, list) or not all(isinstance(item, str) for item in suite_ids):
+        return None
+    if suite_id and suite_id not in suite_ids:
         return None
     sources = index.get("sources", [])
     if not isinstance(sources, list):
@@ -111,6 +106,8 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
         source = Path(str(record["path"])).resolve()
         if not source.is_file():
             missing_sources += 1
+        elif not record.get("sha256") or hashlib.sha256(source.read_bytes()).hexdigest() != record["sha256"]:
+            missing_sources += 1
         if source.is_relative_to(skill_root):
             matched_sources += 1
     if not matched_sources or missing_sources:
@@ -121,27 +118,33 @@ def _cache_match(cache_dir: Path, skill_root: Path, suite_id: str | None) -> dic
             return None
     return {
         "cache_dir": str(cache_dir),
-        "suite_id": manifest["suite_id"],
-        "updated_at": str(manifest.get("updated_at", "")),
+        "suite_ids": sorted(suite_ids),
         "matched_sources": matched_sources,
         "source_integrity": {"records": len(sources), "missing": missing_sources},
+        "source_freshness": "current",
     }
+
+
+def sync_workspace(skill_root: Path, workspace: Path, suite_id: str | None = None) -> dict[str, Any]:
+    """Refresh one explicit Suite, or safely place unclassified Skills in General."""
+    result = import_suite(skill_root, suite_id or "suite:general", workspace)
+    manifest = json.loads((Path(result["cache_dir"]) / "cache-manifest.json").read_text(encoding="utf-8"))
+    return {**result, "suite_ids": manifest["suite_ids"], "synchronized": True}
 
 
 def resolve_cache(skill_root: Path, workspace: Path, suite_id: str | None = None) -> dict[str, Any]:
     skill_root, workspace = skill_root.resolve(), workspace.resolve()
     if not skill_root.is_dir():
         raise ValueError(f"Skill root is unavailable: {skill_root}")
-    matches = [match for candidate in _cache_candidates(skill_root, workspace)
-               if (match := _cache_match(candidate, skill_root, suite_id))]
-    if not matches:
-        scope = f" for {suite_id}" if suite_id else ""
-        raise ValueError(f"No valid existing cache matches {skill_root}{scope}")
-    selected = max(matches, key=lambda match: (match["updated_at"], match["cache_dir"]))
+    cache = _workspace_cache_path(workspace)
+    selected = _cache_match(cache, skill_root, suite_id)
+    if selected is None:
+        raise ValueError("Workspace cache is unavailable or stale; synchronize the workspace Skill library")
     return {
         "cache_dir": selected["cache_dir"],
-        "suite_id": selected["suite_id"],
-        "candidate_count": len(matches),
+        "suite_ids": selected["suite_ids"],
+        "suite_id": suite_id if suite_id else selected["suite_ids"][0] if len(selected["suite_ids"]) == 1 else None,
+        "candidate_count": 1,
         "matched_sources": selected["matched_sources"],
         "source_integrity": selected["source_integrity"],
     }
@@ -154,17 +157,29 @@ def _runtime_result(arguments: list[str]) -> dict[str, Any]:
     return json.loads(rendered.getvalue())
 
 
-def run_mission(cache_dir: Path, goal: str, mission_id: str | None) -> dict[str, Any]:
+def run_mission(cache_dir: Path, goal: str, mission_id: str | None, suite_id: str | None,
+                input_artifacts: list[str]) -> dict[str, Any]:
     mission_id = mission_id or uuid4().hex
-    result = _runtime_result([
+    arguments = [
         "run", "--system-dir", str(cache_dir.resolve()), "--mission-id", mission_id, "--goal", goal,
-    ])
+    ]
+    if suite_id:
+        arguments.extend(["--suite", suite_id])
+    for artifact in input_artifacts:
+        arguments.extend(["--input-artifact", artifact])
+    result = _runtime_result(arguments)
     return {"mission_id": mission_id, **result}
 
 
 def mission_status(cache_dir: Path, mission_id: str) -> dict[str, Any]:
     return _runtime_result([
         "status", "--runs-dir", str(cache_dir.resolve() / "runs"), "--mission-id", mission_id,
+    ])
+
+
+def resume_mission(cache_dir: Path, mission_id: str) -> dict[str, Any]:
+    return _runtime_result([
+        "resume", "--system-dir", str(cache_dir.resolve()), "--mission-id", mission_id,
     ])
 
 
@@ -232,6 +247,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     import_parser.add_argument("skill_root", type=Path)
     import_parser.add_argument("--suite-id", required=True)
     import_parser.add_argument("--workspace", type=Path, default=Path.cwd())
+    sync_parser = subparsers.add_parser("sync", help="Synchronize a Skill root into the workspace cache")
+    sync_parser.add_argument("--skill-root", type=Path, required=True)
+    sync_parser.add_argument("--workspace", type=Path, default=Path.cwd())
+    sync_parser.add_argument("--suite-id")
     resolve_parser = subparsers.add_parser("resolve-cache", help="Find a valid existing cache for a Skill directory")
     resolve_parser.add_argument("--skill-root", type=Path, required=True)
     resolve_parser.add_argument("--workspace", type=Path, default=Path.cwd())
@@ -242,6 +261,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser.add_argument("--cache-dir", type=Path, required=True)
     run_parser.add_argument("--goal", required=True)
     run_parser.add_argument("--mission-id")
+    run_parser.add_argument("--suite-id")
+    run_parser.add_argument("--input-artifact", action="append", default=[], metavar="ARTIFACT_ID=PATH")
+    resume_parser = subparsers.add_parser("resume", help="Resume an Agent-mode mission")
+    resume_parser.add_argument("--cache-dir", type=Path, required=True)
+    resume_parser.add_argument("--mission-id", required=True)
     status_parser = subparsers.add_parser("status", help="Show a persisted mission")
     status_parser.add_argument("--cache-dir", type=Path, required=True)
     status_parser.add_argument("--mission-id", required=True)
@@ -254,12 +278,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "import":
             result = import_suite(args.skill_root, args.suite_id, args.workspace)
+        elif args.command == "sync":
+            result = sync_workspace(args.skill_root, args.workspace, args.suite_id)
         elif args.command == "resolve-cache":
             result = resolve_cache(args.skill_root, args.workspace, args.suite_id)
         elif args.command == "inspect":
             result = inspect_cache(args.cache_dir)
         elif args.command == "run":
-            result = run_mission(args.cache_dir, args.goal, args.mission_id)
+            result = run_mission(args.cache_dir, args.goal, args.mission_id, args.suite_id, args.input_artifact)
+        elif args.command == "resume":
+            result = resume_mission(args.cache_dir, args.mission_id)
         elif args.command == "status":
             result = mission_status(args.cache_dir, args.mission_id)
         else:

@@ -17,13 +17,14 @@ Tell an Agent what you need to accomplish in ordinary laboratory language. For e
 
 The Agent selects the workflow internally, checks the available procedures and task state, and asks only for missing information. It explains what is ready, what needs attention, and what can happen next. It does not start device actions without the required approval.
 
-## Cache-first execution
+## Unified workspace graph
 
-When the workflow library has already been imported, the Agent resolves and reuses its valid cache before starting a new task. It imports again only when no matching cache exists or when you explicitly ask to refresh, update, or reimport the workflow library. A spreadsheet, sample description, or other task input does not by itself rebuild the workflow-library cache.
+Each laboratory workspace has one cache named `labontology_workspace_cache`. It stores one graph containing all explicit `SkillSuite` collections and their general Skills. The Agent synchronizes the workspace before planning: new or changed Skill sources update this same graph, while a spreadsheet, sample description, or other task input becomes a mission input and never rebuilds the workflow-library cache.
 
 For maintenance or troubleshooting, resolve an existing cache with:
 
 ```powershell
+python scripts/labontology.py sync --skill-root ..\FduSkills --workspace .. --suite-id suite:fdu
 python scripts/labontology.py resolve-cache --skill-root ..\FduSkills --workspace .. --suite-id suite:fdu
 ```
 
@@ -42,13 +43,13 @@ This installs the required `PyYAML` dependency in the Python environment that wi
 Run these commands from this directory:
 
 ```powershell
-python scripts/labontology.py import ..\FduSkills --suite-id suite:fdu --workspace ..
-python scripts/labontology.py inspect --cache-dir ..\labontology_fdu_skill_cache
-python scripts/labontology.py run --cache-dir ..\labontology_fdu_skill_cache --goal "检查实验步骤所需资源是否齐全"
-python scripts/labontology.py status --cache-dir ..\labontology_fdu_skill_cache --mission-id <returned-mission-id>
+python scripts/labontology.py sync --skill-root ..\FduSkills --suite-id suite:fdu --workspace ..
+python scripts/labontology.py inspect --cache-dir ..\labontology_workspace_cache
+python scripts/labontology.py run --cache-dir ..\labontology_workspace_cache --suite-id suite:fdu --goal "检查实验步骤所需资源是否齐全"
+python scripts/labontology.py status --cache-dir ..\labontology_workspace_cache --mission-id <returned-mission-id>
 ```
 
-`import` returns the cache directory and confirms that its graph is valid. `inspect` reports the suite, available Skills and capabilities, graph size, and whether every indexed source path still exists. `run` returns a new `mission_id` and the Runtime context; it does not execute a laboratory action by itself. `status` reads the mission record persisted beneath `<cache-dir>/runs`.
+`sync` returns the workspace cache and confirms that its graph is valid. `inspect` reports every Suite, available capabilities, graph size, and source freshness. `run` returns a new `mission_id` and the Runtime context; it does not execute a laboratory action by itself. Add `--input-artifact <name>=<path>` to attach a task spreadsheet or other task input. `status` and `resume` read or continue the mission record persisted beneath `<cache-dir>/runs`.
 
 ## Routine read-only actions
 

@@ -26,6 +26,15 @@ def test_skill_requires_cache_resolution_before_importing():
     skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
 
     assert "resolve-cache" in skill
-    assert "Do not import when a valid matching cache is found" in skill
-    assert "explicitly asks to refresh, update, or reimport" in skill
+    assert "synchronize the workspace Skill root" in skill
+    assert "one workspace cache" in skill
     assert "A task data file is not a reason to rebuild the workflow-library cache" in skill
+
+
+def test_skill_declares_one_workspace_graph_with_explicit_suites():
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "one workspace cache" in skill
+    assert "SkillSuite" in skill
+    assert "synchronize" in skill
+    assert "task data file" in skill

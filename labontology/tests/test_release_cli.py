@@ -85,6 +85,20 @@ def test_import_creates_and_validates_a_cache(tmp_path: Path):
     assert result["validation"] == {"graphs": 1, "valid": True}
 
 
+def test_import_reports_only_the_imported_suite_skill_count(tmp_path: Path):
+    first = make_skill_root(tmp_path)
+    second = tmp_path / "second-skill"
+    second.mkdir()
+    (second / "SKILL.md").write_text("---\nname: second\n---\n", encoding="utf-8")
+    run_cli("import", str(first), "--suite-id", "suite:first", "--workspace", str(tmp_path))
+
+    result = json.loads(run_cli(
+        "import", str(second), "--suite-id", "suite:second", "--workspace", str(tmp_path),
+    ).stdout)
+
+    assert result["skill_count"] == 1
+
+
 def test_inspect_reports_cache_summary(tmp_path: Path):
     cache = import_demo_cache(tmp_path)
 
@@ -111,6 +125,17 @@ def test_resolve_cache_reuses_matching_valid_cache(tmp_path: Path):
     assert result["candidate_count"] == 1
 
 
+def test_sync_imports_an_unclassified_skill_into_general_suite(tmp_path: Path):
+    source = make_skill_root(tmp_path)
+
+    result = json.loads(run_cli(
+        "sync", "--skill-root", str(source), "--workspace", str(tmp_path),
+    ).stdout)
+
+    assert result["cache_dir"].endswith("labontology_workspace_cache")
+    assert result["suite_ids"] == ["suite:general"]
+
+
 def test_run_creates_mission_and_returns_context(tmp_path: Path):
     cache = import_demo_cache(tmp_path)
 
@@ -120,6 +145,32 @@ def test_run_creates_mission_and_returns_context(tmp_path: Path):
 
     assert result["mission_id"]
     assert result["mission"]["status"] == "awaiting_decision"
+
+
+def test_run_preserves_task_spreadsheet_as_a_mission_artifact(tmp_path: Path):
+    cache = import_demo_cache(tmp_path)
+    spreadsheet = tmp_path / "chemical_space.xlsx"
+    spreadsheet.write_bytes(b"task input")
+
+    result = json.loads(run_cli(
+        "run", "--cache-dir", str(cache), "--goal", "plan reaction",
+        "--input-artifact", f"chemical-space={spreadsheet}",
+    ).stdout)
+
+    assert result["mission"]["artifacts"]["chemical-space"] == str(spreadsheet.resolve())
+
+
+def test_resume_is_available_from_release_entrypoint(tmp_path: Path):
+    cache = import_demo_cache(tmp_path)
+    mission_id = json.loads(run_cli(
+        "run", "--cache-dir", str(cache), "--goal", "resume me",
+    ).stdout)["mission_id"]
+
+    result = json.loads(run_cli(
+        "resume", "--cache-dir", str(cache), "--mission-id", mission_id,
+    ).stdout)
+
+    assert result["mission"]["mission_id"] == mission_id
 
 
 def test_status_reads_mission_created_by_run(tmp_path: Path):
