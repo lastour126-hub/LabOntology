@@ -35,8 +35,8 @@ Each laboratory workspace has one cache named `labontology_workspace_cache`. It 
 For maintenance or troubleshooting, resolve an existing cache with:
 
 ```powershell
-python scripts/labontology.py sync --skill-root ..\FduSkills --workspace .. --suite-id suite:fdu
-python scripts/labontology.py resolve-cache --skill-root ..\FduSkills --workspace .. --suite-id suite:fdu
+python scripts/labontology.py sync --skill-root ..\..\..\FduSkills --workspace ..\..\.. --suite-id suite:fdu
+python scripts/labontology.py resolve-cache --skill-root ..\..\..\FduSkills --workspace ..\..\.. --suite-id suite:fdu
 ```
 
 ## Install
@@ -54,10 +54,10 @@ python -m pip install -r requirements.txt
 Run these commands from this directory:
 
 ```powershell
-python scripts/labontology.py sync --skill-root ..\FduSkills --suite-id suite:fdu --workspace ..
-python scripts/labontology.py inspect --cache-dir ..\labontology_workspace_cache
-python scripts/labontology.py run --cache-dir ..\labontology_workspace_cache --suite-id suite:fdu --goal "检查实验步骤所需资源是否齐全"
-python scripts/labontology.py status --cache-dir ..\labontology_workspace_cache --mission-id <returned-mission-id>
+python scripts/labontology.py sync --skill-root ..\..\..\FduSkills --suite-id suite:fdu --workspace ..\..\..
+python scripts/labontology.py inspect --cache-dir ..\..\..\labontology_workspace_cache
+python scripts/labontology.py run --cache-dir ..\..\..\labontology_workspace_cache --suite-id suite:fdu --goal "检查实验步骤所需资源是否齐全"
+python scripts/labontology.py status --cache-dir ..\..\..\labontology_workspace_cache --mission-id <returned-mission-id>
 ```
 
 `sync` returns the workspace cache and confirms that its graph is valid. `inspect` reports every Suite, available capabilities, graph size, and source freshness. `run` returns a new `mission_id` and the Runtime context; it does not execute a laboratory action by itself. Add `--input-artifact <name>=<path>` to attach a task spreadsheet or other task input. `status` and `resume` read or continue the mission record persisted beneath `<cache-dir>/runs`.

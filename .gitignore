@@ -1,5 +1,5 @@
 # Keep this repository limited to the published LabOntology Skill.
 *
 !.gitignore
-!labontology/
-!labontology/**
+!.agent/
+!.agent/**

@@ -5,9 +5,9 @@ from pathlib import Path
 from core.runtime.registry import Registry
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 FDU_ROOT = PROJECT_ROOT / "FduSkills"
-REGISTRY_PATH = PROJECT_ROOT / "labontology" / "tests" / "fixtures" / "fdu" / "registry.yaml"
+REGISTRY_PATH = PROJECT_ROOT / ".agent" / "skills" / "labontology-skill" / "tests" / "fixtures" / "fdu" / "registry.yaml"
 VERIFY_SCRIPT_DIR = FDU_ROOT / "fdu-resource-verify" / "scripts"
 sys.path.insert(0, str(VERIFY_SCRIPT_DIR))
 

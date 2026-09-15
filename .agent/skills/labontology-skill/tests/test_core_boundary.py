@@ -14,8 +14,8 @@ def test_release_core_never_imports_archived_skills():
 
 
 def test_only_labontology_is_a_published_skill():
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[4]
 
-    assert (root / "labontology" / "SKILL.md").is_file()
+    assert (root / ".agent" / "skills" / "labontology-skill" / "SKILL.md").is_file()
     assert not (root / "labontology-creator").exists()
     assert not (root / "labontology-run").exists()

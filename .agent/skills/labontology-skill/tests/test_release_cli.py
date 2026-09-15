@@ -6,8 +6,9 @@ import sys
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CLI = PROJECT_ROOT / "labontology" / "scripts" / "labontology.py"
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+SKILL_ROOT = PROJECT_ROOT / ".agent" / "skills" / "labontology-skill"
+CLI = SKILL_ROOT / "scripts" / "labontology.py"
 
 
 def run_cli(*args: str, check: bool = True, input: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -504,7 +505,7 @@ def test_fdu_quick_start_imports_and_starts_a_read_only_mission(tmp_path: Path):
 
 def test_release_skill_runs_without_repository_siblings(tmp_path: Path):
     published = tmp_path / "published"
-    shutil.copytree(PROJECT_ROOT / "labontology", published)
+    shutil.copytree(SKILL_ROOT, published)
     source = make_skill_root(tmp_path)
     command = [sys.executable, str(published / "scripts" / "labontology.py")]
     environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
