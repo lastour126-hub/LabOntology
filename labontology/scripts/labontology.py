@@ -438,6 +438,30 @@ def list_missions(cache_dir: Path, query: str | None = None) -> dict[str, Any]:
     return {"missions": missions}
 
 
+def _user_facing_error(exc: Exception) -> str:
+    """Translate common release errors into experiment-language guidance."""
+    message = str(exc)
+    translations = (
+        ("Workspace cache is unavailable or stale; synchronize the workspace Skill library",
+         "实验流程库需要更新，请先同步后再继续。"),
+        ("Multiple existing SkillSuites own this root; specify --suite-id",
+         "这个 Skill 目录对应多个实验流程集合，请明确要使用的实验项目。"),
+        ("--all requires an existing explicit SkillSuite mapping for this root",
+         "只有已经登记过实验项目的 Skill 目录才能执行全量维护。"),
+        ("Mission belongs to a different SkillSuite",
+         "这个任务属于另一个实验项目，请继续使用任务原本所属的项目。"),
+        ("Unknown Skill:", "没有找到匹配的实验步骤："),
+        ("Unknown Skill in", "当前实验项目中没有找到这个实验步骤："),
+        ("Required inputs missing:", "执行前还缺少必要输入："),
+        ("Required capability unavailable:", "执行前还缺少必要能力："),
+    )
+    for source, target in translations:
+        if message.startswith(source):
+            suffix = message[len(source):].lstrip()
+            return f"{target}{suffix}" if suffix else target
+    return message
+
+
 def _routine_decision(cache_dir: Path, mission_id: str, skill_id: str, reason: str,
                       suite_id: str | None = None) -> dict[str, Any]:
     cache_dir = cache_dir.resolve()
@@ -575,7 +599,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             result = list_missions(args.cache_dir, args.query)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        parser.error(str(exc))
+        parser.error(_user_facing_error(exc))
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

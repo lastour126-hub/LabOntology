@@ -15,15 +15,31 @@ Help users move a laboratory task forward safely. Treat ordinary descriptions of
 4. Explain the result in laboratory language: recommended next step, available procedure, missing prerequisite, current task state, and any approval needed.
 5. Do not ask the user to choose a command or expose cache, graph, Skill, or Runtime terminology unless they are maintaining the library or ask for technical detail.
 
+## User-facing response contract
+
+Every response should lead with the laboratory outcome, then give only the next useful step.
+
+- **Ready:** say what procedure is available and what can happen next.
+- **Missing condition:** name the missing material, file, capability, or evidence and ask for only that item.
+- **Waiting for approval:** state the proposed action, its impact, and the exact confirmation needed.
+- **Paused task:** identify the matching task, its current state, and what will be restored; do not imply that a device action will be repeated automatically.
+- **Library problem:** say “实验流程库需要更新” or equivalent before giving technical detail.
+
+Do not expose raw tracebacks, filesystem internals, cache paths, or command flags in ordinary conversation. If several projects or tasks match, present their human-readable names and ask one focused disambiguation question. Keep technical identifiers available only as a secondary detail for maintenance or troubleshooting.
+
 ## Task situations
 
 ### Prepare or plan an experiment
 
 Inspect the available procedures and start or resume a task for the stated goal. State what is ready, what is missing, and the next safe step.
 
+Example: “我找到样品处理流程。当前缺少离心机可用性确认；补充后我会继续检查下一项。”
+
 ### Check readiness or progress
 
 Check the workflow library and any existing task. Report only the relevant procedures, source freshness, missing conditions, and current progress.
+
+Example: “昨天的任务停在等待确认，已保留此前的输入和结果。下一步是确认是否继续该检查。”
 
 ### Maintain the workflow library
 
@@ -32,6 +48,8 @@ When the user explicitly adds, updates, refreshes, or asks to validate laborator
 ### Request an action
 
 Confirm only a routine read-only check that is eligible under the recorded policy. Explain why a device-facing, high-impact, stale, or evidence-incomplete action requires the approval path instead.
+
+Example: “这是只读检查，不会修改实验设备。确认后我会执行并返回检查结果。”
 
 ## Internal command routing
 
