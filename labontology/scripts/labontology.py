@@ -13,6 +13,9 @@ from uuid import uuid4
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+VENDOR_DIR = Path(__file__).resolve().parent / "_vendor"
+if str(VENDOR_DIR) not in sys.path:
+    sys.path.insert(0, str(VENDOR_DIR))
 from core import ontology as ONTOLOGY
 from core.creator.importer import discover_tree, export_bundle
 from core.creator.intake import receive_bundle

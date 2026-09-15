@@ -30,13 +30,13 @@ python scripts/labontology.py resolve-cache --skill-root ..\FduSkills --workspac
 
 ## Install
 
-Run these commands from this directory before using the Skill:
+发布包已内嵌固定版本的 PyYAML（6.0.3），正常使用不需要单独安装 PyYAML。开发环境仍可执行：
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-This installs the required `PyYAML` dependency in the Python environment that will run the commands below.
+这会为开发和测试环境安装同版本 `PyYAML`；公开入口会优先使用 Skill 内置版本。
 
 ## FDU read-only example
 
