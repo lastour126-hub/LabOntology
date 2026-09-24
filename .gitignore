@@ -1,5 +1,7 @@
 # Keep this repository limited to the published LabOntology Skill.
 *
 !.gitignore
-!.agent/
-!.agent/**
+!skills/
+!skills/labontology-skill/
+!skills/labontology-skill/**
+skills/labontology-skill/.pytest_cache/

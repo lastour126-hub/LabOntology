@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class FlowNode:
+    id: str
+    node_type: str
+    skill_id: str | None = None
+    order: int = 0
+    input_artifacts: list[str] = field(default_factory=list)
+    output_artifacts: list[str] = field(default_factory=list)
+    next_node_id: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FlowNode":
+        return cls(
+            id=data["id"],
+            node_type=data.get("node_type", data.get("type", "skill_call")),
+            skill_id=data.get("skill"),
+            order=int(data.get("order", 0)),
+            input_artifacts=list(data.get("inputs", [])),
+            output_artifacts=list(data.get("outputs", [])),
+            next_node_id=data.get("next"),
+        )
+
+
+@dataclass
+class SkillFlow:
+    id: str
+    nodes: list[FlowNode]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SkillFlow":
+        nodes = [FlowNode.from_dict(item) for item in data.get("nodes", data.get("steps", []))]
+        return cls(data["id"], sorted(nodes, key=lambda node: node.order))
+
+
+@dataclass
+class SkillSpec:
+    id: str
+    optional_command: list[str] = field(default_factory=list)
+    optional_entrypoints: list[str] = field(default_factory=list)
+    outputs: dict[str, str] = field(default_factory=dict)
+    input_artifacts: list[str] = field(default_factory=list)
+    required_capabilities: list[str] = field(default_factory=list)
+    working_dir: str | None = None
+    timeout_seconds: int = 300
+    side_effect_level: str = "read_only"
+    argument_bindings: dict[str, Any] = field(default_factory=dict)
+    fixed_arguments: list[str] = field(default_factory=list)
+    knowledge_dir: str | None = None
+    decision_policy: dict[str, Any] = field(default_factory=dict)
+    goal_types: list[str] = field(default_factory=list)
+    triggers: list[str] = field(default_factory=list)
+    preconditions: list[str] = field(default_factory=list)
+    failure_modes: list[str] = field(default_factory=list)
+    recommended_next_skills: list[str] = field(default_factory=list)
+    retry_limit: int = 1
+
+
+@dataclass
+class ExecutionPolicySpec:
+    id: str
+    applies_to: list[str] = field(default_factory=list)
+    blocked: bool = False
+    requires_confirmation: bool = False
+
+
+@dataclass
+class SkillExecution:
+    id: str
+    skill_id: str
+    status: str
+    outputs: dict[str, str] = field(default_factory=dict)
+    return_code: int | None = None
+    error: str | None = None
+    failure_kind: str | None = None
+    retryable: bool = False
+    retry_count: int = 0
+
+
+@dataclass
+class MissionState:
+    mission_id: str
+    status: str = "created"
+    artifacts: dict[str, str] = field(default_factory=dict)
+    skill_executions: dict[str, dict[str, Any]] = field(default_factory=dict)
+    block_reason: str | None = None
+    mode: str = "agent"
+    goal: str = ""
+    constraints: list[str] = field(default_factory=list)
+    decisions: list[dict[str, Any]] = field(default_factory=list)
+    observations: list[dict[str, Any]] = field(default_factory=list)
+    pending_action: dict[str, Any] | None = None
+    available_capabilities: list[str] = field(default_factory=list)
+    start_skill: str | None = None
+    suite_id: str | None = None
+    supervisor_status: str = "needs_action"
+    pending_ticket: dict[str, Any] | None = None
+    action_history: list[dict[str, Any]] = field(default_factory=list)
+    untracked_external_calls: list[dict[str, Any]] = field(default_factory=list)
+    constraints_digest: str | None = None
+    artifact_records: dict[str, dict[str, Any]] = field(default_factory=dict)
+    prepared_skill: dict[str, Any] | None = None
+    replan_required: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mission_id": self.mission_id,
+            "status": self.status,
+            "artifacts": self.artifacts,
+            "skill_executions": self.skill_executions,
+            "block_reason": self.block_reason,
+            "mode": self.mode,
+            "goal": self.goal,
+            "constraints": self.constraints,
+            "decisions": self.decisions,
+            "observations": self.observations,
+            "pending_action": self.pending_action,
+            "available_capabilities": self.available_capabilities,
+            "start_skill": self.start_skill,
+            "suite_id": self.suite_id,
+            "supervisor_status": self.supervisor_status,
+            "pending_ticket": self.pending_ticket,
+            "action_history": self.action_history,
+            "untracked_external_calls": self.untracked_external_calls,
+            "constraints_digest": self.constraints_digest,
+            "artifact_records": self.artifact_records,
+            "prepared_skill": self.prepared_skill,
+            "replan_required": self.replan_required,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MissionState":
+        return cls(
+            mission_id=data["mission_id"],
+            status=data.get("status", "created"),
+            artifacts=dict(data.get("artifacts", {})),
+            skill_executions=dict(data.get("skill_executions", {})),
+            block_reason=data.get("block_reason"),
+            mode=data.get("mode", "agent"),
+            goal=data.get("goal", ""),
+            constraints=list(data.get("constraints", [])),
+            decisions=list(data.get("decisions", [])),
+            observations=list(data.get("observations", [])),
+            pending_action=data.get("pending_action"),
+            available_capabilities=list(data.get("available_capabilities", [])),
+            start_skill=data.get("start_skill"),
+            suite_id=data.get("suite_id"),
+            supervisor_status=data.get("supervisor_status", "needs_action"),
+            pending_ticket=data.get("pending_ticket"),
+            action_history=list(data.get("action_history", [])),
+            untracked_external_calls=list(data.get("untracked_external_calls", [])),
+            constraints_digest=data.get("constraints_digest"),
+            artifact_records=dict(data.get("artifact_records", {})),
+            prepared_skill=data.get("prepared_skill"),
+            replan_required=bool(data.get("replan_required", False)),
+        )
