@@ -1,1 +1,5 @@
+# Skill 内的本地测试与缓存不纳入仓库。
+tests/
+.pytest_cache/
 __pycache__/
+*.py[cod]

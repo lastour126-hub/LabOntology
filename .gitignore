@@ -1,7 +1,6 @@
-# Keep this repository limited to the published LabOntology Skill.
+# 仓库只跟踪根目录的忽略规则和 LabOntology Skill。
 *
 !.gitignore
 !skills/
 !skills/labontology-skill/
 !skills/labontology-skill/**
-skills/labontology-skill/.pytest_cache/

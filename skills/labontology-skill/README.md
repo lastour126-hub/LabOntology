@@ -1,113 +1,105 @@
-# LabOntology Quick Start
+# LabOntology 使用说明
 
-`labontology` is one self-contained Skill with two internal modules:
+`labontology` 是一个独立的 Skill，内部包含两个模块：
 
-- Creator discovers visible standard Skill directories and maintains one workspace cache.
-- Runtime owns mission state, evidence, execution, recovery, and approvals.
+- Creator：发现当前环境中可见的标准 Skill 目录，并维护工作区缓存。
+- Runtime：管理任务状态、证据、执行、恢复和审批。
 
-LabOntology is the entrypoint for laboratory work and workflow-library maintenance. Other laboratory Skills are worker capabilities selected by LabOntology; they are not direct user-request entrypoints. Ordinary writing, spreadsheet, image, presentation, and general file-generation tasks stay outside LabOntology unless they are part of a laboratory task. Feedback from repeated failures or corrections may be used to maintain the workflow graph within the existing safety boundary.
+LabOntology 是实验任务和实验流程库维护的统一入口。其他实验 Skill 作为 Worker，由 LabOntology 根据任务选择，不直接响应用户的实验请求。普通写作、表格、图片、演示文稿和一般文件生成不进入 LabOntology，除非它们属于实验任务的一部分。重复失败或用户纠正产生的反馈，可在现有安全边界内用于维护流程图谱。
 
-The public entrypoint keeps those boundaries intact while providing a short path for normal use. It does not import external historical Skills.
+公开入口保留这些边界，同时简化日常使用；它不会导入历史遗留的外部 Skill。
 
-## Use it in conversation
+## 对话中使用
 
-Tell an Agent what you need to accomplish in ordinary laboratory language. For example:
+直接用自然语言说明实验目标，例如：
 
-- "I am preparing a sample treatment experiment. What should I check first?"
-- "Before starting, are the materials and equipment for this procedure ready?"
-- "I paused this experiment yesterday. What is the current status and next step?"
+- “准备做样品处理实验，开始前需要检查什么？”
+- “这一步所需的材料和设备是否已经就绪？”
+- “昨天暂停的实验现在到哪一步了？”
 
-The Agent selects the workflow internally, checks the available procedures and task state, and asks only for missing information. It explains what is ready, what needs attention, and what can happen next. It does not start device actions without the required approval.
+Agent 会在内部选择流程，核对已有规程与任务状态，只询问缺少的信息，并说明已具备的条件、待处理的问题和下一步。未经必要审批，不会启动设备动作。
 
-Responses are written for experiment users rather than developers: the result comes first, followed by the next action or the one missing condition. Technical terms such as cache paths and Suite IDs appear only when maintaining or troubleshooting the workflow library.
+面向实验人员的回复先说明结果，再说明下一步或唯一缺少的条件。缓存路径、Suite ID 等技术信息仅在维护或排查流程库时出现。
 
-When you describe the experimental sequence in conversation, the Agent turns it into a short proposed flow and asks you to confirm the order. Confirmed steps are treated as workflow evidence; unrelated Skills in the same project are not automatically combined into one procedure.
+如果用户在对话中描述实验顺序，Agent 会整理出简短的候选流程，请用户确认顺序。确认后的步骤可作为流程证据；同一项目中的其他 Skill 不会因此被自动拼成完整规程。
 
-Typical conversations:
+典型回复：
 
 - “准备条件已检查完成；目前只缺少离心机可用性确认。”
 - “我找到昨天暂停的任务，已保留已有结果。是否继续下一步？”
 - “这是只读检查，不会改变设备状态。确认后我再执行。”
 - “实验流程库需要更新；我会只同步这次任务相关的步骤。”
 
-## Normal installation and first use
+## 安装与首次使用
 
-Install LabOntology and the laboratory Worker Skills as ordinary `SKILL.md` directories in the host's normal Skill location. The user only needs to describe the laboratory goal in natural language.
+将 LabOntology 和实验 Worker Skill 分别作为包含 `SKILL.md` 的目录，放到宿主环境的常规 Skill 位置。用户只需用自然语言描述实验目标。
 
-On the first laboratory request, LabOntology discovers the visible standard Skill directories and creates the workspace cache automatically. Later requests reuse that cache; a changed, added, or removed Worker Skill triggers synchronization. The user does not need to call LabOntology by name or provide Skill paths.
+首次收到实验请求时，LabOntology 会发现可见的标准 Skill 目录，并自动建立工作区缓存。后续请求复用缓存；Worker Skill 新增、变更或移除时会触发同步。用户无需点名调用 LabOntology，也无需提供 Skill 路径。
 
-Worker Skill source files are read-only inputs to LabOntology. LabOntology does not rewrite or add configuration to those Skills.
+Worker Skill 的源文件对 LabOntology 来说是只读输入；LabOntology 不会改写这些 Skill，也不会向其中添加配置。
 
-## Unified workspace graph
+发布包已内嵌 PyYAML 6.0.3，正常使用无需单独安装。
 
-Each laboratory workspace has one cache named `labontology_workspace_cache`. It stores one graph containing all visible Worker Skills. The Agent prepares the workspace before planning: new or changed Skill sources update this same graph, while a spreadsheet, sample description, or other task input becomes a mission input and never rebuilds the workflow-library cache.
+## 工作区图谱与缓存
 
-For maintainers who need to inspect automatic discovery explicitly:
+每个实验工作区使用一个名为 `labontology_workspace_cache` 的缓存，其中的单一图谱包含所有可见的 Worker Skill。Agent 在规划前准备工作区：新增或变更的 Skill 源文件更新同一图谱；表格、样品说明等任务材料则作为任务输入，不会触发流程库缓存重建。
+
+维护人员可以显式查看自动发现结果：
 
 ```powershell
 python scripts/labontology.py bootstrap
 ```
 
-`bootstrap` uses the current workspace and visible Skill locations by default. When started from a project-local path such as `<project>/.claude/skills/labontology-skill`, it automatically uses `<project>` as the workspace. An explicit root is only an advanced maintenance or test override.
+默认情况下，`bootstrap` 使用当前目录作为工作区，并发现可见的 Skill 位置。从本目录运行时，当前目录就是工作区；如果需要使用上级项目目录，请显式传入 `--workspace`。从 `.agent/skills`、`.claude/skills` 等宿主目录内运行时，程序可自动定位其所属项目。
 
-For maintenance or troubleshooting, resolve an existing cache with:
+维护或排查时，可以同步流程库并定位已有缓存：
 
 ```powershell
 python scripts/labontology.py sync --skill-root ..\..\..\FduSkills --workspace ..\..\.. --suite-id suite:fdu
 python scripts/labontology.py resolve-cache --skill-root ..\..\..\FduSkills --workspace ..\..\.. --suite-id suite:fdu
 ```
 
-## Install
+## FDU 只读示例
 
-发布包已内嵌固定版本的 PyYAML（6.0.3），正常使用不需要单独安装 PyYAML。开发环境仍可执行：
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
-这会为开发和测试环境安装同版本 `PyYAML`；公开入口会优先使用 Skill 内置版本。
-
-## FDU read-only example
-
-Run these commands from this directory:
+以下命令均从本目录运行：
 
 ```powershell
 python scripts/labontology.py sync --skill-root ..\..\..\FduSkills --suite-id suite:fdu --workspace ..\..\..
 python scripts/labontology.py inspect --cache-dir ..\..\..\labontology_workspace_cache
 python scripts/labontology.py run --cache-dir ..\..\..\labontology_workspace_cache --suite-id suite:fdu --goal "检查实验步骤所需资源是否齐全"
-python scripts/labontology.py status --cache-dir ..\..\..\labontology_workspace_cache --mission-id <returned-mission-id>
+python scripts/labontology.py status --cache-dir ..\..\..\labontology_workspace_cache --mission-id <返回的任务ID>
 ```
 
-`sync` returns the workspace cache and confirms that its graph is valid. `inspect` reports every Suite, available capabilities, graph size, and source freshness. `run` returns a new `mission_id` and the Runtime context; it does not execute a laboratory action by itself. Add `--input-artifact <name>=<path>` to attach a task spreadsheet or other task input. `status` and `resume` read or continue the mission record persisted beneath `<cache-dir>/runs`.
+`sync` 返回工作区缓存位置，并确认图谱有效。`inspect` 报告各 Suite、可用能力、图谱规模和源文件是否最新。`run` 创建任务并返回 `mission_id` 及 Runtime 上下文；它本身不会执行实验动作。可用 `--input-artifact <名称>=<路径>` 附加任务表格等输入。`status` 和 `resume` 用于读取或继续保存在 `<cache-dir>/runs` 下的任务记录。
 
-The model-facing Runtime protocol is maintained in [references/runtime-protocol.md](references/runtime-protocol.md). It defines the mission state, Worker read gate, one-action rule, result return, and failure handling. Keep this README focused on installation, maintenance, and troubleshooting.
+面向模型的 Runtime 协议见 [references/runtime-protocol.md](references/runtime-protocol.md)，其中规定任务状态、Worker 读取门槛、单动作规则、结果回传及失败处理。本 README 主要说明使用、维护和排查方式。
 
-Generated plans, protocol files, submission records, and other Agent outputs are stored under `<cache-dir>/runs/<mission-id>/artifacts`. Input files such as a spreadsheet are referenced in place and are not moved.
+生成的计划、规程文件、提交记录等 Agent 产物保存在 `<cache-dir>/runs/<mission-id>/artifacts` 下。表格等输入文件仅在原位置引用，不会被移动。
 
-All Skill actions use the same `act` entrypoint. A decision may select one document Worker, request a human answer, use an explicitly approved low-risk read-only Agent fallback, or complete the mission after Runtime checks. Every selected Worker or fallback enters `waiting_agent`; the host Agent follows the prepared `SKILL.md` for a Worker, or performs the approved native analysis for a fallback, and returns the actual result through `resume`. Fallback results are recorded as `agent_native` and are not presented as standard Worker results. If that document declares an optional script accelerator, the host may invoke it explicitly after checking its inputs and outputs; LabOntology never auto-starts a local process merely because a script exists. After a human answer, `context` returns `replan_required=true`; the Agent must reassess and select a Worker, use an approved fallback, or ask the next focused clarification, and Runtime rejects direct completion. If `match_found` is false, the Agent reports the reason and offers the fallback only for routine read-only work. A Worker whose declared input artifact is already present may be surfaced even when keyword overlap is absent, so the Agent must inspect the returned Worker card before deciding. The Agent records the user's confirmation in the decision assessment before issuing the action; device-facing or significant actions, missing inputs, missing evidence, unavailable instruction sources, and scoped authorization remain in the Runtime approval path. Use `python scripts/runtime.py` for advanced `resume`, `reconcile`, and Agent-directed Runtime operations.
+所有 Skill 动作都通过同一个 `act` 入口。一次决策可以选择一个文档 Worker、请求用户回答、在获得明确同意后执行低风险只读的 Agent 兜底分析，或在 Runtime 检查后完成任务。选中的 Worker 或兜底分支进入 `waiting_agent`；宿主 Agent 按准备好的 `SKILL.md` 执行 Worker，或进行已获同意的本机分析，再通过 `resume` 回传真实结果。兜底结果标记为 `agent_native`，不会冒充标准 Worker 结果。
 
-## Lightweight self-maintenance
+如果 Worker 文档声明了可选脚本，宿主可在核对输入输出后显式调用。LabOntology 不会仅因脚本存在就自动启动本地进程。收到用户回答后，`context` 会返回 `replan_required=true`，Agent 必须重新评估并选择 Worker、使用已获同意的兜底方式，或提出下一个明确问题；Runtime 不接受直接完成。若 `match_found=false`，Agent 会说明原因，且只对常规只读任务提出兜底建议。已存在所声明输入材料的 Worker 可能在关键词不匹配时仍作为候选出现，因此决策前仍需核对 Worker 卡片。
 
-Runtime feedback is stored as observable JSONL events, not hidden reasoning. After repeated missing conditions or failures, inspect suggestions without changing the graph:
+Agent 在发出动作前，将用户确认记录在决策评估中。设备相关或高影响动作、缺少输入或证据、指令来源不可用、授权范围不明等情况，仍走 Runtime 的审批路径。高级 `resume`、`reconcile` 和由 Agent 主导的 Runtime 操作可使用 `python scripts/runtime.py`。
+
+## 轻量级自维护
+
+Runtime 反馈以可观察的 JSONL 事件保存，不记录隐藏推理。重复出现条件缺失或执行失败时，可先只读查看维护建议，不改动图谱：
 
 ```powershell
 python scripts/labontology.py suggest-maintenance --cache-dir <cache-dir>
 ```
 
-After explicit review, apply only a low-risk metadata or relationship patch:
+明确检查后，才应用低风险的元数据或关系补丁：
 
 ```powershell
 python scripts/labontology.py maintain-graph --cache-dir <cache-dir> --patch-file patch.json --reason "补充重复缺失的前置条件"
 ```
 
-Graph replacement keeps a single latest backup in `<cache-dir>/.backup/`. There are no ontology versions; recovery is explicit:
+图谱替换时会在 `<cache-dir>/.backup/` 保留一份最近的备份；不维护多版本本体。需要恢复时显式执行：
 
 ```powershell
 python scripts/labontology.py restore-backup --cache-dir <cache-dir>
 ```
 
-Successful missions also leave a compact advisory record in
-`<cache-dir>/experiences.jsonl`. The next `context` may return at most three
-similar records as `historical_experiences`. These records are only hints for
-the Agent: they never select a Worker, satisfy a missing input, bypass a
-safety check, or modify the graph. Failed missions remain in `feedback.jsonl`.
+成功任务还会在 `<cache-dir>/experiences.jsonl` 留下一条简要记录。后续 `context` 最多返回三条相似记录，字段为 `historical_experiences`。它们只供 Agent 参考，不能直接选择 Worker、补足缺失输入、绕过安全检查或修改图谱。失败任务仍记录在 `feedback.jsonl`。
