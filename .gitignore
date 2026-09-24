@@ -1,6 +1,8 @@
-# 仓库只跟踪根目录的忽略规则和 LabOntology Skill。
+# 仓库只跟踪根目录文档、忽略规则和 LabOntology Skill。
 *
 !.gitignore
+!README.md
+!examples.md
 !skills/
 !skills/labontology-skill/
 !skills/labontology-skill/**
