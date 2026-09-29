@@ -1,23 +1,23 @@
 # LabOntology Examples
 
-The six examples below are independent. You can try any one of them without following a fixed order. All required data is included in the prompts or generated from the stated parameters, so no extra files are needed. The experimental Skills used here can be obtained from SCPHub.
+The six examples below are independent and can be run in any order. All required data is included in the prompts or generated from the stated parameters, so no extra files are needed. The experimental Skills used here can be obtained from SCPHub.
 
 ## First use
 
-Open the project where you want to run the experiment, then install LabOntology in your Agent:
+Open the project used for the experiment, then install LabOntology in the Agent environment:
 
 ```text
 Please install LabOntology. Get this Skill directory and place it in a Skill directory visible to the current project.
 https://github.com/lastour126-hub/LabOntology/tree/master/skills/labontology-skill
 ```
 
-After installation, you can initialize it explicitly:
+After installation, LabOntology can be initialized explicitly:
 
 ```text
 Please initialize LabOntology for the current project.
 ```
 
-You can also start with any experiment below. The first experiment task initializes LabOntology automatically. Later tasks in the same project do not need to initialize it again.
+Any experiment below can also be started directly. The first experiment task initializes LabOntology automatically. Later tasks in the same project do not need to initialize it again.
 
 ## Choose an experiment
 
@@ -149,7 +149,7 @@ First-round prompt:
 ```text
 Please start a teaching simulation of a damped oscillator. Mark all data as simulated and do not call external APIs. Parameters: m=0.5 kg, k=200 N/m, c=1 N·s/m, x0=0.01 m, v0=0, sampling rate 200 Hz, duration 8 s.
 
-Use sympy to organize m*x''+c*x'+k*x=0 and provide the natural frequency, damping ratio, and damped frequency. Generate a noiseless displacement signal from the analytical solution. Use ode-solver for a numerical solution and compare it with the analytical result. Save the parameters, equation, simulated data, and ODE error as a baseline report. Record the task state; I will add sensor conditions later.
+Use sympy to organize m*x''+c*x'+k*x=0 and provide the natural frequency, damping ratio, and damped frequency. Generate a noiseless displacement signal from the analytical solution. Use ode-solver for a numerical solution and compare it with the analytical result. Save the parameters, equation, simulated data, and ODE error as a baseline report. Record the task state; sensor conditions will be added later.
 ```
 
 Second-round prompt in the same long conversation:
@@ -230,7 +230,7 @@ Output the cell volume, composition, density, crystal symmetry, space group, CIF
 Second-round prompt after checking the result:
 
 ```text
-I checked the density report: it did not explicitly list the number of atoms in the conventional cell or explain how that number enters the density formula. Create a related report-revision task in LabOntology, add both items, and recalculate the density. Also record “Before calculating crystal density, check the cell type, number of basis atoms, and volume units” as a reminder for future materials-structure analyses. Keep the existing structure files and all other correct results.
+The density report did not explicitly list the number of atoms in the conventional cell or explain how that number enters the density formula. Create a related report-revision task in LabOntology, add both items, and recalculate the density. Also record “Before calculating crystal density, check the cell type, number of basis atoms, and volume units” as a reminder for future materials-structure analyses. Keep the existing structure files and all other correct results.
 ```
 
 Third-round prompt in a new conversation in the same project:

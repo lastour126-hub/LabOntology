@@ -7,13 +7,13 @@
 <p align="center">
   <a href="#what-it-does">What it does</a> ·
   <a href="#quick-start">Quick start</a> ·
-  <a href="examples.en.md">Examples</a> ·
+  <a href="Examples.en.md">Examples</a> ·
   <a href="#repository-layout">Repository layout</a>
 </p>
 
 <p align="center"><a href="README.md">中文</a> · English</p>
 
-An experiment may involve looking up information, choosing a method, and checking results. It may also pause because materials are missing, equipment change, or a result looks wrong. LabOntology selects available experimental Skills based on your goal and current conditions. It records the sources, results, and open questions at each step, so the task can resume from what has already been confirmed.
+An experimental task only needs to specify its goal, available materials, and constraints. LabOntology organizes the capabilities needed for the task, arranges the experimental steps, and checks each step's inputs, outputs, and conditions. When materials are missing, results look abnormal, or conditions change, completed work is preserved, the task is paused, and the remaining steps are adjusted. The task can continue across long or later conversations without reconstructing the whole workflow.
 
 ## What it does
 
@@ -28,7 +28,7 @@ Tell LabOntology what you want to do. It checks whether the current experimental
 
 ## Quick start
 
-Install LabOntology first, then install the experimental Skills needed for your task. Python 3.11 or newer is required. The experimental Skills used in the examples are obtained through [SCPHub](https://scphub.intern-ai.org.cn/). The [examples](examples.en.md) page shows six complete cases and their installation prompts.
+Install LabOntology first, then install the experimental Skills needed for your task. Python 3.11 or newer is required. The experimental Skills used in the examples are obtained through [SCPHub](https://scphub.intern-ai.org.cn/). The [examples](Examples.en.md) page shows six complete cases and their installation prompts.
 
 ### Codex
 
@@ -64,7 +64,7 @@ Install any experimental Skills in a directory your agent can discover, too. Onc
 
 ## Examples
 
-The six independent cases cover small-molecule analysis, lead screening, ELISA data analysis, physics simulation, synthetic-biology simulation, and crystal-structure analysis. All required data is included in the prompts or generated from stated parameters. Each case includes SCPHub Skill installation prompts, task prompts, and completion requirements. [See the examples](examples.en.md).
+The six independent cases cover small-molecule analysis, lead screening, ELISA data analysis, physics simulation, synthetic-biology simulation, and crystal-structure analysis. All required data is included in the prompts or generated from stated parameters. Each case includes SCPHub Skill installation prompts, task prompts, and completion requirements. [See the examples](Examples.en.md).
 
 ## Scope and limits
 
