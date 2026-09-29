@@ -7,7 +7,7 @@
 <p align="center">
   <a href="#what-it-does">What it does</a> ·
   <a href="#quick-start">Quick start</a> ·
-  <a href="examples.md">Examples</a> ·
+  <a href="examples.en.md">Examples</a> ·
   <a href="#repository-layout">Repository layout</a>
 </p>
 
@@ -28,7 +28,7 @@ Tell LabOntology what you want to do. It checks whether the current experimental
 
 ## Quick start
 
-Install LabOntology first, then install the experimental Skills needed for your task. Python 3.11 or newer is required. The experimental Skills used in the examples are obtained through [SCPHub](https://scphub.intern-ai.org.cn/). The [examples](examples.md) page, currently in Chinese, shows six complete cases and their installation prompts.
+Install LabOntology first, then install the experimental Skills needed for your task. Python 3.11 or newer is required. The experimental Skills used in the examples are obtained through [SCPHub](https://scphub.intern-ai.org.cn/). The [examples](examples.en.md) page shows six complete cases and their installation prompts.
 
 ### Codex
 
@@ -64,7 +64,7 @@ Install any experimental Skills in a directory your agent can discover, too. Onc
 
 ## Examples
 
-The six independent cases cover small-molecule analysis, lead screening, protein-structure assessment, physics simulation, synthetic-biology simulation, and crystal-structure analysis. Each includes SCPHub Skill installation prompts, a ready-to-use task prompt, and completion requirements. [See the examples (Chinese)](examples.md).
+The six independent cases cover small-molecule analysis, lead screening, ELISA data analysis, physics simulation, synthetic-biology simulation, and crystal-structure analysis. All required data is included in the prompts or generated from stated parameters. Each case includes SCPHub Skill installation prompts, task prompts, and completion requirements. [See the examples](examples.en.md).
 
 ## Scope and limits
 
