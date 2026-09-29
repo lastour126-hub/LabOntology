@@ -102,6 +102,8 @@ Create one decision file for the current Runtime decision. A Skill action uses:
 }
 ```
 
+`uncertainties` lists unresolved facts that block the action and require clarification. `authenticity_gaps` records provenance or result limitations that must remain visible in the mission record, but does not block execution on its own. Put a missing fact that affects whether or how the action can proceed (for example, unknown sample identity or device calibration) in `uncertainties`.
+
 Submit it only after `prepare-skill`:
 
 ```powershell

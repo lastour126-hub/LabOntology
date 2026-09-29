@@ -443,7 +443,7 @@ class AgentRuntime:
             self._record_prerequisite_feedback(skill, action, prerequisite_error)
             return self._observe(state, "blocked", prerequisite_error)
         assessment = action["assessment"]
-        concerns = assessment["uncertainties"] + assessment["authenticity_gaps"]
+        concerns = list(assessment["uncertainties"])
         if assessment["impact"] == "significant" and not assessment.get("authorization", "").strip():
             concerns.append("Significant impact: " + assessment["rationale"])
         if any(p.requires_confirmation and skill.id in p.applies_to for p in self.policies):
@@ -694,7 +694,7 @@ class AgentRuntime:
             assessment = action["assessment"]
             # Approval alone does not fill in missing facts. Return to reasoning
             # when the human supplies evidence, so the Agent reassesses the action.
-            if assessment["uncertainties"] or assessment["authenticity_gaps"]:
+            if assessment["uncertainties"]:
                 if not answer.strip():
                     return state
                 self._feedback("mission_resumed", action.get("skill_id"),
