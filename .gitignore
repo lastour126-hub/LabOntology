@@ -2,11 +2,14 @@
 *
 !.gitignore
 !README.md
-!README.en.md
+!README.zh.md
 !Examples.md
-!Examples.en.md
+!Examples.zh.md
 !assets/
 !assets/labontology-banner.svg
+!assets/autonomous-experiment-architecture.png
+!assets/autonomous-experiment-workflow.png
+!assets/schema-model.png
 !skills/
 !skills/labontology-skill/
 !skills/labontology-skill/**

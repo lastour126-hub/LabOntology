@@ -1,54 +1,54 @@
-# LabOntology 使用示例
+# LabOntology Examples
 
-下面有六个可以直接尝试的案例，彼此独立，不用按顺序完成。所需数据都写在提示词里，或由 Agent 按给定参数生成，不用另外准备文件。本页用到的实验 Skill 都可以从 SCPHub 获取。
+<p align="center">English · <a href="Examples.zh.md">中文</a></p>
 
-## 首次使用
+The six examples below are independent and can be run in any order. All required data is included in the prompts or generated from the stated parameters, so no extra files are needed. The experimental Skills used here can be obtained from SCPHub.
 
-在 Agent 中打开要使用的项目，先安装 LabOntology：
+## First use
+
+Open the project used for the experiment, then install LabOntology in the Agent environment:
 
 ```text
-请安装 LabOntology。获取这个 Skill 目录，放到当前项目可识别的技能目录中。
+Please install LabOntology. Get this Skill directory and place it in a Skill directory visible to the current project.
 https://github.com/lastour126-hub/LabOntology/tree/master/skills/labontology-skill
 ```
 
-安装完成后，可以手动输入：
+After installation, LabOntology can be initialized explicitly:
 
 ```text
-请初始化当前项目的 LabOntology。
+Please initialize LabOntology for the current project.
 ```
 
-也可以直接开始下面的实验任务，第一次使用时会自动初始化。同一项目完成初始化后，后续任务不用重复操作。
+Any experiment below can also be started directly. The first experiment task initializes LabOntology automatically. Later tasks in the same project do not need to initialize it again.
 
-## 选一个实验开始
+## Choose an experiment
 
-案例涉及小分子分析、先导分子筛选、ELISA 数据分析、物理模拟、合成生物学模拟和晶体结构分析。可以按想了解的内容选一个开始。
+The examples cover small-molecule analysis, lead screening, ELISA data analysis, physics simulation, synthetic-biology simulation, and crystal-structure analysis.
 
-| 场景 | 案例 | 看点 |
+| Scenario | Example | What it demonstrates |
 |---|---|---|
-| 场景 | 案例 | 可以看到什么 |
-|---|---|---|
-| 实验能力选择 | 小分子结构校验、性质计算与可视化 | 看 Agent 如何按任务选 Skill，并在无效结构进入后续计算前将它筛出。 |
-| 按实验顺序推进 | 先导分子生成、结构筛选与 ADMET 初筛 | 看候选分子怎样依次经过生成、校验、优化和初筛。 |
-| 实验局部重规划 | ELISA 标准曲线与样品浓度分析 | S2 超出曲线范围后，补测并重算 S2，保留其他结果。 |
-| 跨长上下文能力 | 阻尼振子频谱分析与方程校验 | 多轮补充条件后，仍能找到原参数和基线结果。 |
-| 跨对话能力 | 代谢条件影响合成基因开关 | 在新对话中找回原任务，只重算变化的条件。 |
-| 经验积累与自我改进 | 晶体结构分析与材料参数整理 | 把返工时发现的检查项留作提醒，在后续分析中再用上。 |
+| Selecting experimental capabilities | Small-molecule validation, property calculation, and visualization | The Agent chooses capabilities based on the goal and filters an invalid structure before later calculations. |
+| Following an experimental sequence | Lead generation, structure screening, and ADMET triage | Candidate molecules move through generation, validation, optimization, and screening in order. |
+| Local replanning | ELISA standard curve and sample concentration analysis | When S2 is outside the curve range, only the affected part is measured again and recalculated. |
+| Long-context continuity | Damped-oscillator spectral analysis and equation checking | Parameters and baseline results remain available after several rounds of added conditions. |
+| Cross-conversation continuity | Metabolic conditions affecting a synthetic gene switch | A new conversation restores the old task and recalculates only the changed condition. |
+| Experience accumulation and self-improvement | Crystal-structure analysis and material-parameter organization | A missed check found during rework becomes a reminder for later structure analyses. |
 
-### 1. 实验能力选择：小分子结构校验、性质计算与可视化
+### 1. Selecting experimental capabilities: small-molecule validation, property calculation, and visualization
 
-#### 安装 Skill
+#### Install the Skills
 
 ```text
-请安装下面三个 Skill：
-- smiles-validation：https://scphub.intern-ai.org.cn/skill/1032
-- molecule-visualization：https://scphub.intern-ai.org.cn/skill/918
-- admet-prediction：https://scphub.intern-ai.org.cn/skill/739
+Please install these three Skills:
+- smiles-validation: https://scphub.intern-ai.org.cn/skill/1032
+- molecule-visualization: https://scphub.intern-ai.org.cn/skill/918
+- admet-prediction: https://scphub.intern-ai.org.cn/skill/739
 ```
 
-#### 推荐提示词
+#### Suggested prompt
 
 ```text
-请检查下面 4 个 SMILES，并完成一次完整的小分子结构分析：
+Please check the following four SMILES and complete a small-molecule structure analysis:
 
 | name | SMILES |
 |---|---|
@@ -57,198 +57,193 @@ https://github.com/lastour126-hub/LabOntology/tree/master/skills/labontology-ski
 | ibuprofen | CC(C)Cc1ccc(cc1)[C@@H](C)C(=O)O |
 | broken_candidate | CC(=O)Oc1ccccc1C(=O |
 
-先使用 smiles-validation 逐条检查结构。无效结构不得进入后续步骤；只对有效结构使用 molecule-visualization 生成二维结构图和分子网格，再使用 admet-prediction 计算基础性质。
+First use smiles-validation to check each structure. An invalid structure must not enter later steps. For valid structures only, use molecule-visualization to generate 2D structure images and molecular grids, then use admet-prediction to calculate basic properties.
 
-请最后生成一份完整报告，至少包括：原始输入、每条结构的校验结果、无效结构的跳过原因、有效结构的性质表、二维结构图、分子网格和生成文件清单。说明哪些结构进入最终报告，不要根据结构推断药效。
+Please produce a complete report containing at least: the original inputs, validation results for every structure, the reason each invalid structure was skipped, a property table for valid structures, the 2D images, the molecular grid, and a list of generated files. State which structures entered the final report. Do not infer efficacy from the structures.
 ```
 
-在这个案例里，LabOntology 把每条 SMILES 与结构校验、二维图、分子网格和性质结果对应起来。无效结构会留在记录中，但不会进入后续步骤；如果某条分子的绘图或性质计算失败，可以只从这条分子对应的步骤重跑，其他结果不受影响。
+LabOntology connects each SMILES with its validation, visualization, and property results. An invalid structure remains in the record but does not enter later steps. If visualization or property calculation fails for one molecule, the corresponding part can be rerun without discarding the other results.
 
-### 2. 按实验顺序推进：先导分子生成、结构筛选与 ADMET 初筛
+### 2. Following an experimental sequence: lead generation, structure screening, and ADMET triage
 
-#### 安装 Skill
+#### Install the Skills
 
 ```text
-请安装下面四个 Skill：
-- denovo-design：https://scphub.intern-ai.org.cn/skill/798
-- smiles-validation：https://scphub.intern-ai.org.cn/skill/1032
-- molecular-optimization：https://scphub.intern-ai.org.cn/skill/916
-- admet-prediction：https://scphub.intern-ai.org.cn/skill/739
+Please install these four Skills:
+- denovo-design: https://scphub.intern-ai.org.cn/skill/798
+- smiles-validation: https://scphub.intern-ai.org.cn/skill/1032
+- molecular-optimization: https://scphub.intern-ai.org.cn/skill/916
+- admet-prediction: https://scphub.intern-ai.org.cn/skill/739
 ```
 
-#### 推荐提示词
+#### Suggested prompt
 
 ```text
-请以阿司匹林作为教学用先导分子，完成一次从候选生成到 ADMET 初筛的完整计算流程。
+Using aspirin as a teaching example, please complete a computational workflow from candidate generation to ADMET triage.
 
-先导分子 SMILES：CC(=O)Oc1ccccc1C(=O)O
+Lead SMILES: CC(=O)Oc1ccccc1C(=O)O
 
-先使用 denovo-design 按 R-group 和 bioisostere 两种思路各生成 4 个候选。然后使用 smiles-validation 逐一检查，只保留完整、可解析、单一分子且不含 `*` 连接点的结构。对通过检查的候选使用 molecular-optimization 做一轮约束优化，目标为 MW<500、LogP<5、QED>0.5；最后使用 admet-prediction 对优化后的结构做口服性质和 ADMET 初筛。
+First use denovo-design to generate four candidates with each of two strategies: R-group and bioisostere. Then use smiles-validation to check every candidate and keep only complete, parseable, single-molecule structures without `*` attachment points. For passing candidates, use molecular-optimization for one constrained optimization round with MW<500, LogP<5, and QED>0.5 as targets. Finally use admet-prediction for oral-property and ADMET triage of the optimized structures.
 
-请最终输出：排序后的候选短名单、全部候选的淘汰表、结构校验结果、优化前后性质对比、ADMET 结果和一份总结报告。记录每个候选是如何从生成结果进入下一步的，不要把模型预测写成实验结果或药效结论。
+Please output a ranked shortlist, a rejection table for all candidates, validation results, before-and-after optimization properties, ADMET results, and a summary report. Record how each candidate moved from generation to the next step. Do not present model predictions as experimental results or efficacy conclusions.
 ```
 
-候选分子从生成、结构检查到优化和 ADMET 初筛的过程，会由 LabOntology 按步骤串起来。每个候选是否进入下一步、在哪一步被淘汰及其原因都有记录，最后的短名单也能查回对应的生成结果。
+LabOntology links candidate generation, structure checking, optimization, and ADMET triage in order. Every candidate's entry into the next step, rejection point, and rejection reason can be traced. The final shortlist remains linked to the generation results.
 
-### 3. 实验局部重规划：ELISA 标准曲线与样品浓度分析
+### 3. Local replanning: ELISA standard curve and sample concentration analysis
 
-标准品和样品读数已直接写在提示词中，不用准备酶标仪文件。第一轮先拟合标准曲线并检查样品范围；第二轮给出超范围样品的稀释复测值，让 LabOntology 只重跑受影响的部分。
+The standard and sample readings are included in the prompts, so no plate-reader file is needed. The first round fits the standard curve and checks sample range. The second round supplies a diluted measurement for the out-of-range sample, and LabOntology reruns only the affected part.
 
-#### 安装 Skill
+#### Install the Skills
 
 ```text
-请安装下面三个 Skill：
-- immunology-assays：https://scphub.intern-ai.org.cn/skill/867
-- physics-fitting：https://scphub.intern-ai.org.cn/skill/952
-- sympy：https://scphub.intern-ai.org.cn/skill/1048
+Please install these three Skills:
+- immunology-assays: https://scphub.intern-ai.org.cn/skill/867
+- physics-fitting: https://scphub.intern-ai.org.cn/skill/952
+- sympy: https://scphub.intern-ai.org.cn/skill/1048
 ```
 
-#### 推荐提示词
+#### Suggested prompts
 
-第一轮提示词：
+First-round prompt:
 
 ```text
-请用下面这组模拟 ELISA 读数完成标准曲线拟合和样品初步定量。数据是为教程构造的，不代表真实实验结果；所有浓度单位均为 ng/mL，OD450 为原始吸光度。
+Please use the following simulated ELISA readings to fit a standard curve and estimate sample concentrations. The data is constructed for this tutorial and does not represent real experimental results. All concentrations are in ng/mL and OD450 is the raw absorbance.
 
-空白孔：0.050、0.052
-标准品（浓度；两个复孔 OD450）：
-1.56；0.075、0.079
-3.125；0.101、0.106
-6.25；0.164、0.171
-12.5；0.325、0.338
-25；0.681、0.704
-50；1.245、1.281
-100；1.790、1.824
+Blank wells: 0.050, 0.052
+Standards (concentration; two replicate OD450 readings):
+1.56; 0.075, 0.079
+3.125; 0.101, 0.106
+6.25; 0.164, 0.171
+12.5; 0.325, 0.338
+25; 0.681, 0.704
+50; 1.245, 1.281
+100; 1.790, 1.824
 
-样品 S1 未稀释，OD450=0.418、0.432；样品 S2 未稀释，OD450=1.955、1.972。先计算空白均值，并按 immunology-assays 的处理方法将其作为 blank_od 输入，避免重复扣空白；拟合 4PL 标准曲线并计算复孔均值。再用 physics-fitting 检查拟合残差、置信区间和样品是否处于标准曲线范围；用 sympy 整理 4PL 反算浓度的公式并核对反算条件。
+Sample S1 is undiluted, with OD450=0.418, 0.432. Sample S2 is undiluted, with OD450=1.955, 1.972. First calculate the blank mean and pass it as blank_od to the immunology-assays method so the blank is not subtracted twice. Fit a 4PL standard curve and calculate replicate means. Then use physics-fitting to check residuals, confidence intervals, and whether each sample is within the standard-curve range. Use sympy to organize the 4PL inverse-concentration formula and check the inversion conditions.
 
-先提交当前可报告结果，明确区分可定量样品和超范围样品。保存原始读数、拟合参数、残差图、浓度表和计算步骤。S2 若超出曲线范围，不要外推浓度，先标为待复测。
+Report the currently valid results first, clearly distinguishing quantifiable and out-of-range samples. Save the raw readings, fitted parameters, residual plot, concentration table, and calculation steps. If S2 is outside the curve range, do not extrapolate its concentration; mark it for remeasurement.
 ```
 
-第二轮提示词（接着同一任务发送）：
+Second-round prompt, sent in the same task:
 
 ```text
-S2 已按 1:10 稀释后复测，两个复孔 OD450 为 0.692 和 0.711；标准品和空白仍使用上一轮的读数。请沿用已经通过检查的标准曲线，只对 S2 计算稀释后浓度和乘以 10 后的原样浓度，检查复测读数是否回到定量范围，并更新最终报告。保留 S1 和原 S2 超范围记录，不要重复拟合未变化的标准品；记录这次从哪一步继续以及哪些结果沿用。
+S2 was diluted 1:10 and remeasured. The two replicate OD450 readings are 0.692 and 0.711; the standards and blank remain unchanged. Reuse the standard curve that has already passed checking. Calculate the diluted S2 concentration and the original-sample concentration after multiplying by 10, check whether the remeasurement is within the quantifiable range, and update the final report. Keep the original out-of-range S2 record and the S1 result. Do not refit unchanged standards. Record where this round resumed and which results were reused.
 ```
 
-LabOntology 会把原始读数、标准曲线、范围检查和样品定量放在同一任务里。S2 超出范围时，任务停在待复测这一步；第二轮补上读数后，只接着计算 S2，沿用已经完成的标准曲线和 S1 结果。
+LabOntology keeps the raw readings, standard curve, range check, and sample quantification in one task. When S2 is out of range, the task pauses at remeasurement. After the new reading is supplied, it continues from S2 and reuses the completed curve and S1 result.
 
-### 4. 跨长上下文能力：阻尼振子频谱分析与方程校验
+### 4. Long-context continuity: damped-oscillator spectral analysis and equation checking
 
-这是一个多轮推进的物理模拟案例。参数和后续变化都写在下面的对话提示词中；Agent 根据参数生成模拟信号，不用上传测量数据。
+This is a multi-round physics teaching simulation. The parameters and later changes are written in the prompts. The Agent generates the simulated signal from those parameters, so no measurement file is needed.
 
-#### 安装 Skill
+#### Install the Skills
 
 ```text
-请安装下面三个 Skill：
-- sympy：https://scphub.intern-ai.org.cn/skill/1048
-- spectral-analysis：https://scphub.intern-ai.org.cn/skill/1036
-- ode-solver：https://scphub.intern-ai.org.cn/skill/931
+Please install these three Skills:
+- sympy: https://scphub.intern-ai.org.cn/skill/1048
+- spectral-analysis: https://scphub.intern-ai.org.cn/skill/1036
+- ode-solver: https://scphub.intern-ai.org.cn/skill/931
 ```
 
-#### 推荐提示词
-
-第一轮提示词：
+First-round prompt:
 
 ```text
-请开始一个阻尼振子教学模拟，数据标记为 simulated，不调用外部 API。参数：m=0.5 kg，k=200 N/m，c=1 N·s/m，x0=0.01 m，v0=0，采样率 200 Hz，时长 8 s。
+Please start a teaching simulation of a damped oscillator. Mark all data as simulated and do not call external APIs. Parameters: m=0.5 kg, k=200 N/m, c=1 N·s/m, x0=0.01 m, v0=0, sampling rate 200 Hz, duration 8 s.
 
-用 sympy 整理 m*x''+c*x'+k*x=0，给出自然频率、阻尼比和阻尼频率；根据解析解生成无噪声位移信号；用 ode-solver 数值求解并与解析解比较。先保存参数、方程、模拟数据和 ODE 误差，生成基线报告。记录任务状态，后续补充传感器条件。
+Use sympy to organize m*x''+c*x'+k*x=0 and provide the natural frequency, damping ratio, and damped frequency. Generate a noiseless displacement signal from the analytical solution. Use ode-solver for a numerical solution and compare it with the analytical result. Save the parameters, equation, simulated data, and ODE error as a baseline report. Record the task state; sensor conditions will be added later.
 ```
 
-第二轮提示词（在同一段长对话中继续）：
+Second-round prompt in the same long conversation:
 
 ```text
-补充测量条件：传感器读数会被限制在 -8 mm 到 +8 mm，且 3.00 s 到 3.20 s 之间没有读数。请在 LabOntology 中建立与基线任务关联的后续分析，基于上一轮同一组参数，在模拟信号上按这个条件生成 observed_signal，并标注饱和点和缺失区间；不要覆盖无噪声基线数据。再用 spectral-analysis 分析受影响信号：对缺失区间不要补零，先按连续有效区间分析，再把线性插值结果作为单独的敏感性对照；说明饱和和缺失区间分别对主频与振幅包络有什么影响。
+Additional sensor conditions: readings are limited to -8 mm to +8 mm, and there are no readings from 3.00 s to 3.20 s. Create a follow-up analysis associated with the baseline task. Using the same parameters, generate observed_signal under these conditions and mark the saturated points and missing interval. Do not overwrite the noiseless baseline. Use spectral-analysis on the affected signal: do not fill the missing interval with zeros; analyze continuous valid segments first, then use linear interpolation as a separate sensitivity comparison. Explain how saturation and the missing interval affect the dominant frequency and amplitude envelope.
 ```
 
-第三轮提示词：
+Third-round prompt:
 
 ```text
-请汇总本任务：并列比较无噪声基线和加入传感器限制后的结果，说明哪些结论稳定、哪些受数据缺失或饱和影响。报告包含方程推导、参数、两组信号、两次频谱结果、ODE 对照、残差图、误差解释和重跑位置。沿用未变化的 ODE 基线，只重跑受传感器条件影响的信号生成与频谱步骤。
+Please summarize this task by comparing the noiseless baseline with the signal after sensor limits were added. Explain which conclusions are stable and which are affected by missing or saturated data. The report must include the equation derivation, parameters, both signals, both spectral analyses, the ODE comparison, residual plots, error interpretation, and the restart point. Reuse the unchanged ODE baseline and rerun only signal generation and spectral steps affected by the sensor conditions.
 ```
 
-LabOntology 会先保存参数、无噪声信号和数值解作为基线。后来补充的传感器限制会作为新的条件接入任务，不覆盖基线；Agent 只重算受影响的信号和频谱，再把新旧结果放在一起比较。
+LabOntology first saves the parameters, noiseless signal, and numerical solution as a baseline. The later sensor limits become new task conditions without overwriting that baseline. The Agent reruns only the affected signal and spectral analyses and compares the old and new results.
 
-### 5. 跨对话能力：代谢条件影响合成基因开关
+### 5. Cross-conversation continuity: metabolic conditions affecting a synthetic gene switch
 
-这是一个跨对话的合成生物学模拟，不代表真实细胞实验。所有反应和参数都在第一轮提示词中给出；第一段对话完成基线，第二段在同一项目的新对话里调整一个条件并接续任务。
+This is a synthetic-biology teaching simulation and does not represent real cell experiments. All reactions and parameters are supplied in the first prompt. The first conversation creates the baseline; a new conversation in the same project changes one condition and continues the task.
 
-#### 安装 Skill
+#### Install the Skills
 
 ```text
-请安装下面三个 Skill：
-- cobrapy：https://scphub.intern-ai.org.cn/skill/778
-- synthetic-biology：https://scphub.intern-ai.org.cn/skill/1049
-- ode-solver：https://scphub.intern-ai.org.cn/skill/931
+Please install these three Skills:
+- cobrapy: https://scphub.intern-ai.org.cn/skill/778
+- synthetic-biology: https://scphub.intern-ai.org.cn/skill/1049
+- ode-solver: https://scphub.intern-ai.org.cn/skill/931
 ```
 
-#### 推荐提示词
-
-第一段对话：
+First conversation:
 
 ```text
-请完成一个代谢条件影响合成基因 toggle switch 的教学模拟，所有结果标注为 simulated_toy_model，不代表真实大肠杆菌生理或实验数据。
+Please complete a teaching simulation of how metabolic conditions affect a synthetic-gene toggle switch. Mark all results as simulated_toy_model; they do not represent real E. coli physiology or experimental data.
 
-用 cobrapy 在本地从头构建一个最小模型，不读取外部模型文件，只含以下反应：葡萄糖交换 `EX_glc_e: glc_e <=>`（摄取通量下界分别为 -10 和 -2、上界均为 0 mmol gDW^-1 h^-1）、葡萄糖转运（glc_e -> glc_c）、糖酵解（glc_c -> 2 pyr_c）和伪生长反应（20 pyr_c -> biomass）。最大化伪生长反应。把反应式、通量边界、单位和模型检查结果写入报告，并保存 SBML。
+Use cobrapy to build a minimal model locally from scratch. Do not load an external model file. Include only these reactions: glucose exchange `EX_glc_e: glc_e <=>` with uptake lower bounds of -10 and -2 and upper bound 0 mmol gDW^-1 h^-1, glucose transport (glc_e -> glc_c), glycolysis (glc_c -> 2 pyr_c), and a pseudo-growth reaction (20 pyr_c -> biomass). Maximize the pseudo-growth reaction. Record reaction equations, flux bounds, units, and model checks, and save the SBML.
 
-将各条件的伪生长通量乘以明确的教学缩放系数 0.1 h^-1/(伪生长通量单位)，作为 toggle switch 的生长稀释率 gamma。按下面的方程分别积分两个初始状态，时间范围 0–50 h，输出轨迹和终态：
+Multiply each condition's pseudo-growth flux by the explicit teaching scale 0.1 h^-1/(pseudo-growth flux unit) to obtain the toggle-switch dilution rate gamma. Integrate the following equations for both initial states over 0–50 h and output trajectories and steady states:
 dA/dt = 5/(1+B^2) - (0.5+gamma)A
 dB/dt = 5/(1+A^2) - (0.5+gamma)B
-初始状态分别为 (A,B)=(0.1,3.0) 和 (3.0,0.1)。使用 synthetic-biology 建立并分析开关模型，再用 ode-solver 独立复核至少一个条件，比较终态和残差。不要预设一定存在双稳态。
+Initial states: (A,B)=(0.1,3.0) and (3.0,0.1). Use synthetic-biology to build and analyze the switch model, then use ode-solver to independently verify at least one condition and compare the steady states and residuals. Do not assume that bistability must exist.
 
-最终保存模型、FBA 条件表、两条件的开关轨迹、图、复核结果和总结，并在 LabOntology 中记录每一步的输入输出。不要从网上加载模型或调用需要密钥的服务。
+Save the model, FBA condition table, switch trajectories for both conditions, figures, verification results, and a summary. Record the input and output of every step in LabOntology. Do not download models or call services that require an API key.
 ```
 
-同一项目的新对话：
+New conversation in the same project:
 
 ```text
-请通过 LabOntology 查找本项目之前的“代谢条件影响合成基因开关”任务，找回模型、反应式、参数和结果。现在把碳源受限条件的葡萄糖摄取上限从 2 改为 1 mmol gDW^-1 h^-1，其他条件不变。若上次任务已完成，请建立关联的后续任务；若仍在执行，则从原任务继续。只重算受限条件的 FBA、gamma 和对应的两条 ODE 轨迹，与上次基线比较。保留原结果，不要覆盖未变化的部分，并更新报告。
+Use LabOntology to find this project's previous “metabolic conditions affecting a synthetic-gene switch” task and restore its model, reactions, parameters, and results. Change the glucose uptake upper limit for the carbon-limited condition from 2 to 1 mmol gDW^-1 h^-1, keeping everything else unchanged. If the previous task is complete, create a related follow-up task; if it is still running, continue the original task. Recalculate only the constrained-condition FBA, gamma, and its two ODE trajectories, then compare them with the previous baseline. Keep the original results and update the report without overwriting unchanged parts.
 ```
 
-换到新对话后，LabOntology 可以从项目记录中找回模型、参数和上次结果。这里改变的只有受限条件，因此只重算该条件下的 FBA 和两条 ODE 轨迹；原有基线继续保留，并与新结果关联起来。
+In the new conversation, LabOntology restores the model, parameters, and previous results from the project record. Only the constrained condition changed, so only its FBA and two ODE trajectories are recalculated. The original baseline remains available for comparison.
 
-### 6. 经验积累与自我改进：晶体结构分析与材料参数整理
+### 6. Experience accumulation and self-improvement: crystal-structure analysis and material-parameter organization
 
-这个案例用提示词中的理想化晶体参数，先完成一次简要分析，再根据遗漏返工并形成提醒，最后在锗结构分析中检查提醒是否被沿用；不需要额外准备结构文件。
+This example uses idealized crystal parameters from the prompts. It first completes a brief analysis, then records a missed check during rework, and finally checks whether the reminder is reused for a germanium analysis. No structure file is needed.
 
-#### 安装 Skill
+#### Install the Skills
 
 ```text
-请安装下面三个 Skill：
-- pymatgen：https://scphub.intern-ai.org.cn/skill/974
-- dimensional-analysis：https://scphub.intern-ai.org.cn/skill/800
-- sympy：https://scphub.intern-ai.org.cn/skill/1048
+Please install these three Skills:
+- pymatgen: https://scphub.intern-ai.org.cn/skill/974
+- dimensional-analysis: https://scphub.intern-ai.org.cn/skill/800
+- sympy: https://scphub.intern-ai.org.cn/skill/1048
 ```
 
-#### 推荐提示词
-
-第一轮提示词：
+First-round prompt:
 
 ```text
-请完成一个理想化硅晶体结构分析。所有输入参数都在这里，不要读取外部结构文件或在线材料数据库。
+Please analyze an idealized silicon crystal structure. All input parameters are included here. Do not read an external structure file or query an online materials database.
 
-用 pymatgen 构造 conventional cubic diamond-cubic Si：晶格常数 a=b=c=5.431 Å，α=β=γ=90°；8 个分数坐标为：
-(0,0,0)、(0,1/2,1/2)、(1/2,0,1/2)、(1/2,1/2,0)、
-(1/4,1/4,1/4)、(1/4,3/4,3/4)、(3/4,1/4,3/4)、(3/4,3/4,1/4)。
+Use pymatgen to construct conventional cubic diamond-cubic Si: a=b=c=5.431 Å and α=β=γ=90°. The eight fractional coordinates are:
+(0,0,0), (0,1/2,1/2), (1/2,0,1/2), (1/2,1/2,0),
+(1/4,1/4,1/4), (1/4,3/4,3/4), (3/4,1/4,3/4), (3/4,3/4,1/4).
 
-请输出晶胞体积、组成、密度、晶体对称性、空间群、CIF 和 POSCAR。使用 pymatgen 内置的 Si 原子量；取阿伏伽德罗常数 N_A=6.02214076×10^23 mol^-1。用 dimensional-analysis 检查 Å³、g/mol 与 g/cm³ 的单位换算，用 sympy 核对密度公式 rho = n*M/(N_A*V)。第一版报告先简要列出计算结果，不展开晶胞原子数和密度代入过程；注明这是理想结构计算，不是实际样品的表征。
+Output the cell volume, composition, density, crystal symmetry, space group, CIF, and POSCAR. Use pymatgen's built-in atomic weight for Si and Avogadro's constant N_A=6.02214076×10^23 mol^-1. Use dimensional-analysis to check the conversion between Å³, g/mol, and g/cm³, and use sympy to verify rho = n*M/(N_A*V). In the first report, list the results briefly without expanding the atom-count and density substitution steps. State that this is an ideal-structure calculation, not characterization of a real sample.
 ```
 
-第二轮提示词（检查结果后）：
+Second-round prompt after checking the result:
 
 ```text
-刚才的密度报告中，结果没有明确列出常规晶胞的原子数，也没有说明这个原子数如何代入密度公式。请在 LabOntology 中建立关联的报告修订任务，补上这两项并重新核对密度；再把“计算晶体密度前先核对晶胞类型、基元原子数和体积单位”记录为以后材料结构分析的提醒。保留原有结构文件和其他正确结果。
+The density report did not explicitly list the number of atoms in the conventional cell or explain how that number enters the density formula. Create a related report-revision task in LabOntology, add both items, and recalculate the density. Also record “Before calculating crystal density, check the cell type, number of basis atoms, and volume units” as a reminder for future materials-structure analyses. Keep the existing structure files and all other correct results.
 ```
 
-第三轮提示词（同一项目的新对话）：
+Third-round prompt in a new conversation in the same project:
 
 ```text
-请开始一个新的锗晶体结构分析。先查看 LabOntology 之前记录的材料结构分析提醒，再按提醒检查下面输入并完成分析：常规立方 diamond-cubic Ge，a=b=c=5.658 Å，α=β=γ=90°，元素为 Ge，8 个分数坐标为：
-(0,0,0)、(0,1/2,1/2)、(1/2,0,1/2)、(1/2,1/2,0)、
-(1/4,1/4,1/4)、(1/4,3/4,3/4)、(3/4,1/4,3/4)、(3/4,3/4,1/4)。所有结构参数都已写在这里，不需要上传文件或查询在线材料库。取阿伏伽德罗常数 N_A=6.02214076×10^23 mol^-1，并使用 pymatgen 内置的 Ge 原子量。
+Please start a new germanium crystal-structure analysis. First check the materials-structure reminder recorded by LabOntology, then use it to review the following inputs: conventional cubic diamond-cubic Ge, a=b=c=5.658 Å, α=β=γ=90°, element Ge, and the eight fractional coordinates:
+(0,0,0), (0,1/2,1/2), (1/2,0,1/2), (1/2,1/2,0),
+(1/4,1/4,1/4), (1/4,3/4,3/4), (3/4,1/4,3/4), (3/4,3/4,1/4).
+All structure parameters are included here, so no file upload or online materials database is needed. Use N_A=6.02214076×10^23 mol^-1 and pymatgen's built-in atomic weight for Ge.
 
-生成 CIF 和 POSCAR，计算晶胞体积、原子数、密度、组成和空间群；用 dimensional-analysis 检查单位，用 sympy 检查公式。报告中明确写出晶胞类型、原子数、原子量来源、体积换算和密度代入过程，并说明哪些检查提醒来自上次任务。不要覆盖硅结构的结果。
+Generate CIF and POSCAR, calculate cell volume, atom count, density, composition, and space group, and use dimensional-analysis for units and sympy for the formula. In the report, explicitly state the cell type, atom count, atomic-weight source, volume conversion, and density substitution. Explain which checks came from the previous task. Do not overwrite the silicon results.
 ```
 
-LabOntology 会把硅结构的首次计算、补充检查和后续任务关联起来，并将“先核对晶胞原子数和体积单位”作为后续提醒。开始锗结构分析时，Agent 可以取回这条提醒并记录检查情况；锗的结果另建记录，不覆盖硅的数据。
+LabOntology links the first silicon calculation, the missing-check revision, and the later task. The reminder about checking cell atom count and volume units can be retrieved at the start of the germanium analysis. The germanium result is recorded separately and does not overwrite the silicon result.
