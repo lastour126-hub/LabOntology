@@ -105,7 +105,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         if name == "act":
             command.add_argument("--decision-file", required=True, help="One host-Agent decision as JSON")
         if name == "prepare-skill":
-            command.add_argument("--skill-id", required=True, help="Worker Skill to read before acting")
+            command.add_argument("--skill-id", required=True, help="Skill to read before acting")
         if name == "resume":
             command.add_argument("--action-id", default="", help="External Agent action being reported")
             command.add_argument("--confirm", action="store_true")

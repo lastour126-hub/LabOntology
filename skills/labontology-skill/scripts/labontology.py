@@ -167,7 +167,7 @@ def _automatic_suite_id(skill_root: Path) -> str:
     return f"suite:auto-{digest}"
 
 
-def _worker_skill_ids(skill_root: Path, exclude_skill_dirs: set[Path]) -> set[str]:
+def _skill_ids(skill_root: Path, exclude_skill_dirs: set[Path]) -> set[str]:
     return {
         str(skill.get("id")) for skill in discover_tree(skill_root, exclude_skill_dirs=exclude_skill_dirs)
         if skill.get("id")
@@ -218,7 +218,7 @@ def _remove_cache_path(cache: Path) -> None:
 
 def ensure_workspace_cache(workspace: Path,
                            skill_roots: Sequence[Path] | None = None) -> dict[str, Any]:
-    """Create, reuse, or refresh the one cache for visible Worker Skills."""
+    """Create, reuse, or refresh the one cache for visible Skills."""
     workspace = Path(workspace).resolve()
     cache = _workspace_cache_path(workspace)
     automatic = skill_roots is None
@@ -232,23 +232,23 @@ def ensure_workspace_cache(workspace: Path,
         candidates = _normalise_skill_roots([*discovered, *cached_roots])
         anchor = _default_skill_dir().resolve().parent
         anchor_excluded = _labontology_dirs(anchor) if anchor.is_dir() else {_default_skill_dir()}
-        if anchor in candidates and _worker_skill_ids(anchor, anchor_excluded):
+        if anchor in candidates and _skill_ids(anchor, anchor_excluded):
             candidates = [anchor, *[root for root in candidates if root in cached_roots and root != anchor]]
     else:
         candidates = _normalise_skill_roots(skill_roots or [])
     usable_roots = [(root, _labontology_dirs(root)) for root in candidates]
     root_pairs = [
         (root, excluded) for root, excluded in usable_roots
-        if _worker_skill_ids(root, excluded)
+        if _skill_ids(root, excluded)
     ]
     if not root_pairs:
         raise ValueError("No visible standard Skill root was found")
 
     if automatic:
-        missing_worker_roots = [root for root in cached_roots if root not in {item[0] for item in root_pairs}]
-        if missing_worker_roots:
-            missing = ", ".join(str(root) for root in missing_worker_roots)
-            raise ValueError(f"Previously cached Skill root has no visible Worker Skill: {missing}")
+        missing_skill_roots = [root for root in cached_roots if root not in {item[0] for item in root_pairs}]
+        if missing_skill_roots:
+            missing = ", ".join(str(root) for root in missing_skill_roots)
+            raise ValueError(f"Previously cached Skill root has no visible Skill: {missing}")
 
     def sync_root(root: Path, excluded: set[Path]) -> dict[str, Any]:
         explicit = _explicit_suites_for_root(cache, root)
@@ -722,11 +722,11 @@ def _user_facing_error(exc: Exception) -> str:
     message = str(exc)
     translations = (
         ("No visible standard Skill root was found",
-         "没有找到可见的标准 Skill 目录，请确认实验 Worker Skill 已正常安装。"),
+         "没有找到可见的标准 Skill 目录，请确认实验能力已正常安装。"),
         ("Previously cached Skill root is unavailable",
          "之前缓存的 Skill 目录已不可用，请先检查该 Skill 是否仍然安装："),
-        ("Previously cached Skill root has no visible Worker Skill",
-         "之前缓存的 Skill 目录中已没有可用 Worker Skill："),
+        ("Previously cached Skill root has no visible Skill",
+         "之前缓存的 Skill 目录中已没有可用实验能力："),
         ("Workspace cache is unavailable or stale; synchronize the workspace Skill library",
          "实验流程库需要更新，请先同步后再继续。"),
         ("Multiple existing SkillSuites own this root; specify --suite-id",
@@ -792,7 +792,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     reconcile_parser.add_argument("--summary", required=True)
     reconcile_parser.add_argument("--evidence", action="append", default=[])
     reconcile_parser.add_argument("--provide-artifact", action="append", default=[], metavar="ARTIFACT_ID=PATH")
-    prepare_parser = subparsers.add_parser("prepare-skill", help="Read a Worker Skill before issuing an action")
+    prepare_parser = subparsers.add_parser("prepare-skill", help="Read a Skill before issuing an action")
     prepare_parser.add_argument("--cache-dir", type=Path, required=True)
     prepare_parser.add_argument("--mission-id", required=True)
     prepare_parser.add_argument("--skill-id", required=True)

@@ -46,7 +46,7 @@ def _append_binding(command: list[str], binding: object, value: Any, run_dir: Pa
 class OptionalScriptInvoker:
     """Run an optional script only when the host explicitly requests it.
 
-    Runtime never calls this adapter from ``act``. The document Worker is the
+    Runtime never calls this adapter from ``act``. The Skill document is the
     canonical execution path; this is a host-side acceleration hook.
     """
 

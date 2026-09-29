@@ -80,6 +80,28 @@ def _search_terms(value: str) -> set[str]:
     return terms
 
 
+def _documentation_search_text(documentation: Any) -> str:
+    """Build a bounded search view without placing full documents in context."""
+    if not isinstance(documentation, dict):
+        return ""
+    parts: list[str] = []
+    for key in (
+        "input_hints", "output_hints", "execution_order_hints",
+        "precondition_hints", "constraint_hints", "related_skill_refs",
+    ):
+        values = documentation.get(key, [])
+        if isinstance(values, list):
+            parts.extend(str(value) for value in values[:40])
+    sections = documentation.get("sections", [])
+    if isinstance(sections, list):
+        for section in sections[:20]:
+            if not isinstance(section, dict):
+                continue
+            parts.append(str(section.get("heading") or ""))
+            parts.append(str(section.get("text") or "")[:800])
+    return " ".join(parts)
+
+
 class AgentRuntime:
     def __init__(
         self, skills: dict[str, SkillSpec], store: StateStore,
@@ -145,7 +167,12 @@ class AgentRuntime:
             knowledge = self.knowledge.get(skill.id, {})
             name = str(knowledge.get("name") or skill.id)
             description = str(knowledge.get("description") or "")
-            searchable = f"{skill.id} {name} {description} {' '.join(skill.goal_types)} {' '.join(skill.triggers)} {' '.join(skill.required_capabilities)} {' '.join(skill.input_artifacts)}".lower()
+            searchable = (
+                f"{skill.id} {name} {description} {' '.join(skill.goal_types)} "
+                f"{' '.join(skill.triggers)} {' '.join(skill.required_capabilities)} "
+                f"{' '.join(skill.input_artifacts)} "
+                f"{_documentation_search_text(knowledge.get('documentation'))}"
+            ).lower()
             searchable_terms = _search_terms(searchable)
             score = sum(term in searchable_terms for term in goal_terms)
             card = {
@@ -173,13 +200,19 @@ class AgentRuntime:
             or item[1]["id"] == state.start_skill
             or (item[1]["inputs"] and not item[1]["missing_inputs"])
         ]
+        ranked_cards = sorted(cards, key=lambda item: (-item[0], item[1]["id"]))
         candidates = [card for _, card in sorted(matched_cards, key=lambda item: (-item[0], item[1]["id"]))[:5]]
+        candidate_review_required = not matched_cards and bool(cards)
+        if candidate_review_required:
+            candidates = [card for _, card in ranked_cards[:5]]
+            for card in candidates:
+                card["selection_note"] = "关键词未直接命中，必须读取完整 Skill 文档确认是否适用。"
         historical_experiences = self.store.experiences.search(
             state.goal, skill_ids=[card["id"] for card in candidates]
         )
         if not self.skills:
             coverage_diagnostic = {
-                "status": "no_registered_worker",
+                "status": "no_registered_skill",
                 "execution_started": False,
                 "registered_skill_count": 0,
                 "candidate_count": 0,
@@ -194,22 +227,16 @@ class AgentRuntime:
                     "请先安装或初始化相关能力。"
                 ),
             }
-        elif not candidates:
+        elif candidate_review_required:
             coverage_diagnostic = {
-                "status": "no_matching_worker",
+                "status": "candidate_review",
                 "execution_started": False,
                 "registered_skill_count": len(self.skills),
-                "candidate_count": 0,
-                "fallback_available": True,
-                "fallback_scope": "low_risk_read_only",
-                "fallback_message": (
-                    "如果这是低风险、只读分析，可以由 Agent 直接尝试，"
-                    "结果会标记为 Agent 直接执行。是否继续？"
-                ),
+                "candidate_count": len(candidates),
+                "fallback_available": False,
                 "user_message": (
-                    "当前没有找到能完成这项任务的完整能力，所以还没有开始执行。"
-                    "可能是相关 Skill 没有安装完整，或安装后没有被正确登记。"
-                    "请检查相关 Skill 后重试。"
+                    "当前已登记实验能力，但任务关键词没有直接匹配。"
+                    "请先读取候选 Skill 的完整说明确认是否适用，确认后再开始执行。"
                 ),
             }
         else:
@@ -241,36 +268,36 @@ class AgentRuntime:
             and isinstance(state.pending_action, dict)
             and state.pending_action.get("execution_source") == "agent_native"
         )
-        worker_cycle = {
+        execution_cycle = {
             "entrypoint": "act",
             "after_act": "reconcile" if waiting_for_reconcile else ("resume" if waiting_for_resume else "context"),
             "requires_resume": waiting_for_resume,
             "requires_reconcile": waiting_for_reconcile,
             "resume_mode": (
                 "agent_native" if native_fallback_waiting
-                else "external_worker" if state.status == "waiting_agent"
+                else "external_skill" if state.status == "waiting_agent"
                 else "human_decision" if state.status == "waiting_human"
                 else None
             ),
             "status": state.status,
         }
         if state.status == "running":
-            next_step = "Host Agent: reconcile the interrupted action before choosing another Worker."
+            next_step = "Host Agent: reconcile the interrupted action before choosing another Skill."
         elif state.status == "waiting_agent":
             next_step = (
-                "Host Agent: follow the prepared Worker document; optionally use its script accelerator, "
+                "Host Agent: follow the prepared Skill document; optionally use its script accelerator, "
                 "then call resume with the actual result and read context."
             )
         elif state.status == "waiting_human":
             next_step = "Host Agent: obtain the required user decision, call resume, then read context."
         elif state.replan_required:
             next_step = (
-                "Host Agent: reassess the goal with the human answer, read context, and select a Worker; "
+                "Host Agent: reassess the goal with the human answer, read context, and select a Skill; "
                 "for an explicitly approved low-risk read-only fallback, use agent_fallback; "
-                "do not complete or compute outside a Worker or approved fallback."
+                "do not complete or compute outside a Skill or approved fallback."
             )
         else:
-            next_step = "Host Agent: inspect context and choose the next action; call resume only when the worker_cycle requires it."
+            next_step = "Host Agent: inspect context and choose the next action; call resume only when the execution_cycle requires it."
         return {"mission": state.to_dict(), "skills": candidates, "candidate_count": len(candidates),
                 "registered_skill_count": len(self.skills), "match_found": bool(candidates),
                 "coverage_diagnostic": coverage_diagnostic,
@@ -286,12 +313,12 @@ class AgentRuntime:
                  "retry_candidates": retry_candidates,
                 "workflow_references": self.workflows,
                 "policies": [asdict(p) for p in self.policies],
-                "worker_cycle": worker_cycle,
+                "execution_cycle": execution_cycle,
                 "historical_experiences": historical_experiences,
                 "next": next_step}
 
     def prepare_skill(self, skill_id: str) -> dict[str, Any]:
-        """Read the selected Worker Skill and persist the exact document digest."""
+        """Read the selected Skill and persist the exact document digest."""
         state = self._load()
         skill = self.skills.get(skill_id)
         if skill is None:
@@ -346,7 +373,7 @@ class AgentRuntime:
         if kind not in {"skill", "request_human", "agent_fallback", "complete"}:
             raise ValueError("Decision kind must be skill, request_human, agent_fallback or complete")
         if kind == "complete" and state.replan_required:
-            raise ValueError("Human answer received; replan in context and select a Worker before completing")
+            raise ValueError("Human answer received; replan in context and select a Skill before completing")
         if kind == "skill":
             if action.get("skill_id") not in self.skills:
                 raise ValueError(f"Unknown registered Skill: {action.get('skill_id')}")
@@ -402,7 +429,7 @@ class AgentRuntime:
                 for execution in state.skill_executions.values()
                 if isinstance(execution, dict)
             ):
-                raise ValueError("Cannot complete without a successful Worker result")
+                raise ValueError("Cannot complete without a successful Skill result")
             return self._observe(state, "completed", action["reason"], completed=True)
         if kind == "request_human":
             return self._wait_human(state, action["question"])
@@ -483,10 +510,10 @@ class AgentRuntime:
         return arguments
 
     def _prepared_skill_error(self, state: MissionState, skill: SkillSpec) -> str | None:
-        """Require a fresh read for imported Worker Skills.
+        """Require a fresh read for imported Skills.
 
         Hand-built legacy skills without an instruction source keep their old
-        behavior; imported worker Skills are always checked at the action
+        behavior; imported Skills are always checked at the action
         boundary and again immediately before execution.
         """
         source = self.knowledge.get(skill.id, {}).get("instruction_source")
@@ -494,7 +521,7 @@ class AgentRuntime:
             return None
         prepared = state.prepared_skill
         if not isinstance(prepared, dict) or prepared.get("skill_id") != skill.id:
-            return "Worker Skill requires prepare_skill before execution"
+            return "Skill requires prepare_skill before execution"
         path = Path(str(source["path"])).expanduser().resolve()
         if not path.is_file():
             return f"Skill document is unavailable: {path}"
@@ -573,7 +600,7 @@ class AgentRuntime:
             self._record_prerequisite_feedback(skill, action, error)
             return self._observe(state, "blocked", error)
         state.artifacts.update(action.get("inputs", {}))
-        # Every Worker is executed through the prepared document contract. A
+        # Every Skill is executed through the prepared document contract. A
         # script, when present, is merely an optional host-side accelerator.
         action["ticket_status"] = "waiting_external"
         state.status, state.block_reason = "waiting_agent", None
@@ -737,7 +764,7 @@ class AgentRuntime:
             state.skill_executions[state.pending_action["id"]] = {
                 "id": state.pending_action["id"], "skill_id": skill.id, "status": "failed",
                 "outputs": {}, "error": summary, "evidence": evidence or [],
-                "failure_kind": "external_worker",
+                "failure_kind": "external_skill",
                 "retryable": skill.side_effect_level == "read_only",
                 "retry_count": 0,
             }
