@@ -1,15 +1,10 @@
-# 仓库只跟踪根目录文档、首页图片、忽略规则和 LabOntology Skill。
+# 仓库跟踪根目录文档、忽略规则和 LabOntology Skill；图片资源仅保留在本地。
 *
 !.gitignore
 !README.md
 !README.zh.md
 !Examples.md
 !Examples.zh.md
-!assets/
-!assets/labontology-banner.svg
-!assets/autonomous-experiment-architecture.png
-!assets/autonomous-experiment-workflow.png
-!assets/schema-model.png
 !skills/
 !skills/labontology-skill/
 !skills/labontology-skill/**

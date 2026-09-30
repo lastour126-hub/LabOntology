@@ -1,87 +1,397 @@
-<p align="center">
-  <img src="assets/labontology-banner.svg" alt="LabOntology" width="100%">
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="#overview">Overview</a> ·
-  <a href="#execution-architecture-for-autonomous-experiments">Execution architecture</a> ·
-  <a href="#organizing-and-advancing-experimental-tasks">Workflow</a> ·
-  <a href="#schema-modeling">Schema</a> ·
-  <a href="#quick-start">Quick start</a> ·
-  <a href="Examples.md">Examples</a> ·
-  <a href="#repository-layout">Repository layout</a>
-</p>
+# LabOntology
 
-<p align="center">English · <a href="README.zh.md">中文</a></p>
+### An Ontology-Driven Orchestration and Runtime Supervision Framework for Autonomous Laboratory Agents
 
-<a id="overview"></a>
+**Organize Experimental Capabilities · Supervise Task Execution · Preserve Evidence Trails · Improve Workflows**
 
-LabOntology is an agent Skill package for autonomous laboratory work. It helps agents organize experimental knowledge, workflow structure, execution constraints, equipment capabilities, and result data into a shared information network they can query and reason over to guide execution. Agents can use this network to plan tasks, match experimental capabilities, check execution conditions, and record each result with its supporting evidence. It supports the task lifecycle from planning and execution through monitoring and review.
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Agent Skill](https://img.shields.io/badge/Agent-Skill-6C63FF)](#quick-start)
+[![Examples](https://img.shields.io/badge/Examples-6_workflows-2EA44F)](./Examples.md)
 
-## Execution architecture for autonomous experiments
+[English](./README.md) · [中文](./README.zh.md)
 
-Tasks contain workflows, and workflows consist of nodes. Nodes are linked to the experimental capabilities they require, and those capabilities are matched with equipment and runtime environments. Execution artifacts link back to the task, allowing agents to understand its structure and trace where results came from.
+</div>
 
-![Autonomous experiment execution architecture](assets/autonomous-experiment-architecture.png)
+---
 
-## Organizing and advancing experimental tasks
+## Project Overview
 
-The workflow organizes experimental steps as nodes, with preconditions and checkpoints indicating when to proceed. After a node completes, the agent uses its state and results to decide what comes next. If information is missing or an issue arises, the plan can be adjusted or held for confirmation, while completed results remain in the task record.
+**LabOntology** is an ontology-driven **control layer and unified Skill entry point for laboratory agents**.
 
-![Experimental task workflow from goal to review and continuation](assets/autonomous-experiment-workflow.png)
+Rather than having an agent call experimental tools in isolation, LabOntology organizes the **experimental goal, workflow, capabilities, execution constraints, equipment, runtime environment, task state, results, and evidence** in a shared experimental information network. The agent can use this network to determine what it can do, which Skill to call, what conditions are missing, and which actions require human confirmation.
 
-## Schema modeling
+In operation, LabOntology serves as a **unified entry point and ongoing supervisor** for experimental tasks:
 
-The Schema has definition, data, control, and execution layers, which describe experimental objects, task records, execution rules, and runtime state. Relationships connect these layers, giving experimental knowledge and operations a consistent representation.
+- Organizes tasks around **experimental goals**, rather than isolated tool calls;
+- Discovers and checks suitable **experimental Skills** for the current task;
+- Manages multi-step experiments with explicit **states**, including pause, failure, and recovery;
+- Retains **result provenance and supporting evidence** before a task is marked complete;
+- Maintains reusable **experimental workflows** from successful experience and failure feedback;
+- Preserves clear **human-control boundaries** for equipment-related and other high-impact actions.
 
-![LabOntology Schema entities and relationships](assets/schema-model.png)
+> [!IMPORTANT]
+> LabOntology is **not an instrument driver**, and it does not replace domain-specific experimental Skills.<br>
+> It organizes task state, selects capabilities, supervises execution boundaries, and records evidence; the selected experimental Skill performs the domain operation.
 
-## Quick start
+---
 
-Install LabOntology first, then install the experimental Skills needed for your task. Python 3.11 or newer is required. The experimental Skills used in the examples are obtained through [SCPHub](https://scphub.intern-ai.org.cn/). The [examples](Examples.md) page shows six complete cases and their installation prompts.
+## Why LabOntology?
+
+An autonomous laboratory agent may have access to many heterogeneous capabilities: analysis tools, simulation software, experimental protocol Skills, instruments, databases, and domain agents. The challenge is not simply whether a tool exists, but:
+
+> **Can the right capability be selected for the current experimental state, run under the required constraints, and leave a process that can be traced, resumed, and reviewed?**
+
+| Without a shared control layer | With LabOntology |
+| --- | --- |
+| Skills are called independently | Experimental requests enter through a shared supervision point |
+| Task state is implicit in conversation context | Mission and Runtime state are recorded explicitly |
+| Capability selection relies on names or keywords | Full Skill documents are reviewed against inputs, outputs, and constraints |
+| A failure can interrupt the workflow | Tasks can pause, fail, be reconciled, and resume |
+| Results become detached from how they were produced | Results are linked to execution state, sources, and evidence |
+| Workflow improvements depend on human memory | Successful experience and failure feedback can inform reviewed workflow maintenance |
+
+---
+
+## Core Capabilities
+
+### 1. Ontology-Driven Organization of Experimental Tasks
+
+LabOntology represents an experiment as connected objects rather than a flat sequence of prompts.
+
+```mermaid
+flowchart LR
+    T["Mission / Experimental task"] --> W["Workflow"]
+    W --> N["Node / Experimental step"]
+    N --> C["Required capability"]
+    C --> S["Experimental Skill"]
+    C --> E["Equipment"]
+    C --> R["Runtime environment"]
+
+    N --> X["SkillExecution / Execution record"]
+    X --> O["Result / Artifact"]
+    O --> P["Evidence / Provenance"]
+```
+
+This shared representation helps an agent understand both:
+
+- **What the experiment is intended to do scientifically**
+- **Whether it can be carried out under the current conditions**
+
+### 2. Experimental Capability Discovery and Skill Supervision
+
+For each action, LabOntology:
+
+1. Reads the current Mission and Context;
+2. Searches the workflow library for candidate Skills;
+3. Reads the full Skill document instead of relying only on its name or keywords;
+4. Checks its inputs, outputs, constraints, and execution boundaries;
+5. Selects **one clearly bounded next action**.
+
+Action types include:
+
+- `skill`: run a verified experimental Skill;
+- `request_human`: ask for missing materials, information, or human confirmation;
+- `agent_fallback`: use the agent's native read-only capability when explicitly allowed;
+- `complete`: finish only after the result has been recorded by Runtime.
+
+### 3. Stateful Runtime Supervision
+
+The minimal runtime loop is:
+
+```text
+bootstrap → mission → context → prepare-skill → act
+                                      │
+                                      ├─ waiting_agent → resume → context
+                                      └─ waiting_human → resume → context
+```
+
+An interrupted action is reconciled before the task is planned again.
+
+A result is not considered complete just because it appears in the conversation. The actual result, failure reason, and artifacts must be returned to Runtime, recorded, and made available in the current Context before the task can be marked complete.
+
+### 4. Evidence-Oriented Experimental Execution
+
+LabOntology links execution artifacts back to the task and the process that produced them. This makes it possible to ask:
+
+- Which experimental node produced this result?
+- Which Skill was used?
+- What inputs and conditions were present during execution?
+- Did Runtime record this result?
+- Which evidence supports the final conclusion?
+
+### 5. Reviewed Workflow Improvement
+
+LabOntology records concise experience from successful tasks and structured feedback from failures. These records can inform future workflow-library maintenance, but **do not automatically modify the workflow graph**.
+
+```text
+Successful experience / failure feedback
+                  ↓
+        Propose a maintenance change
+                  ↓
+             Human review
+                  ↓
+        Maintain the workflow graph
+                  ↓
+        Updated, verified workflow library
+```
+
+This allows experience to accumulate while preventing an ordinary failure from silently changing future experimental behavior.
+
+---
+
+## Schema Model
+
+LabOntology separates experimental knowledge and runtime activity into four layers.
+
+| Layer | Role | Typical contents |
+| --- | --- | --- |
+| **Definition** | Describes reusable experimental concepts | Workflows, nodes, capabilities, relationships |
+| **Data** | Represents scientific data in a specific task | Samples, materials, parameters, results, artifacts |
+| **Control** | Describes when and how execution may proceed | Preconditions, checkpoints, approvals, constraints |
+| **Execution** | Records what happened during execution | Mission state, SkillExecution, Runtime state, evidence |
+
+Relationships connect these layers so that one representation can support planning, execution, monitoring, and review.
+
+---
+
+## Execution Lifecycle
+
+```mermaid
+flowchart TD
+    U["User's experimental goal"] --> B["Bootstrap: prepare the workspace and workflow library"]
+    B --> M["Create or resume a Mission"]
+    M --> C["Read the current Context"]
+    C --> D["Discover candidate Skills"]
+    D --> V["Read and verify Skill contracts"]
+    V --> A{"Choose one next action"}
+
+    A -->|Skill| S["Run a clearly bounded Skill action"]
+    A -->|Missing input / approval needed| H["Request human input"]
+    A -->|Allowed read-only fallback| F["Agent-native read-only capability"]
+    A -->|All conditions met| Q["Complete the task"]
+
+    S --> R["Return actual result / failure / artifact"]
+    H --> R
+    F --> R
+    R --> C
+
+    C --> E["Results and evidence recorded by Runtime"]
+    E --> Q
+```
+
+The core principle is:
+
+> **Plan from the current state → perform one clearly bounded action → record the actual result → plan again.**
+
+---
+
+## Quick Start
+
+### Requirements
+
+- Python **3.11+**
+- An agent environment that supports local Skills
+- Install LabOntology before installing domain-specific experimental Skills
+- Install the domain Skills required by your experiment
+
+The experimental Skills used in the repository's six examples are available through [SCPHub](https://scphub.intern-ai.org.cn/).
 
 ### Codex
 
-Enter this in a Codex conversation:
+In a Codex conversation, enter:
 
 ```text
-$skill-installer Install this Skill from https://github.com/lastour126-hub/LabOntology/tree/master/skills/labontology-skill
+$skill-installer Please install this Skill from https://github.com/lastour126-hub/LabOntology/tree/master/skills/labontology-skill
 ```
 
-For manual installation, place the Skill directory in `~/.agents/skills/labontology/` for all your projects, or in `.agents/skills/labontology/` for one project. See the [Codex Skills documentation](https://learn.chatgpt.com/docs/build-skills).
+Install manually to your personal directory:
+
+```text
+~/.agents/skills/labontology/
+```
+
+For the current project only:
+
+```text
+.agents/skills/labontology/
+```
 
 ### Claude Code
 
-Enter this in Claude Code:
+Enter:
 
 ```text
-Install https://github.com/lastour126-hub/LabOntology/tree/master/skills/labontology-skill into ~/.claude/skills/labontology/. Retrieve only this Skill directory.
+Install only the Skill directory from https://github.com/lastour126-hub/LabOntology/tree/master/skills/labontology-skill to ~/.claude/skills/labontology/.
 ```
 
-To use it in just one project, change the destination to that project's `.claude/skills/labontology/`. See the [Claude Code Skills documentation](https://code.claude.com/docs/en/skills).
-
-### Other agents
-
-[Cursor](https://prod.cursor.com/help/customization/skills), [Gemini CLI](https://geminicli.com/docs/cli/skills/), and [OpenCode](https://opencode.ai/docs/skills) can discover Skills from `.agents/skills/`. Enter this in the agent you use:
+For the current project only:
 
 ```text
-Install https://github.com/lastour126-hub/LabOntology/tree/master/skills/labontology-skill into ~/.agents/skills/labontology/. Retrieve only this Skill directory.
+.claude/skills/labontology/
 ```
 
-For a single project, use `.agents/skills/labontology/` within that project instead. Check for an existing directory with the same name before installing. Then start a new session or use your agent's skill reload command.
+### Cursor, Gemini CLI, OpenCode, and Other Compatible Agents
 
-Install any experimental Skills in a directory your agent can discover, too. Once the environment is ready, you can ask it to “initialize LabOntology for this project” or simply start an experimental task. The first task initializes it automatically; you do not need to create it again in the same project.
+Install to:
 
-## Examples
+```text
+~/.agents/skills/labontology/
+```
 
-The six independent cases cover small-molecule analysis, lead screening, ELISA data analysis, physics simulation, synthetic-biology simulation, and crystal-structure analysis. All required data is included in the prompts or generated from stated parameters. Each case includes SCPHub Skill installation prompts, task prompts, and completion requirements. [See the examples](Examples.md).
+Or install in the project directory:
 
-## Scope and limits
+```text
+.agents/skills/labontology/
+```
 
-LabOntology organizes tasks and records their state. The corresponding experimental Skills carry out the specific work; LabOntology does not directly control instruments. If materials, conditions, or a suitable Skill are missing, it explains why the task cannot proceed. Instrument-related or other high-impact actions are not run automatically.
+After installation, start a new session or use the agent's Skill refresh mechanism.
 
-## Repository layout
+> [!TIP]
+> You do not need to initialize LabOntology manually for every experiment.<br>
+> Ask the agent to **"Initialize LabOntology for the current project"**, or describe the experiment directly. It initializes on first use and can reuse the setup for later tasks in the same project.
 
-- [SKILL.md](skills/labontology-skill/SKILL.md): the entry point and usage boundaries for experimental tasks.
-- [references/](skills/labontology-skill/references/): ontology definitions and the [runtime protocol](skills/labontology-skill/references/runtime-protocol.md).
-- [scripts/](skills/labontology-skill/scripts/): workflow-library preparation, task state, and result recording.
+---
+
+## How to Use
+
+Describe the experimental goal in natural language. You do not need to know internal commands or arrange the Skills yourself.
+
+For example:
+
+```text
+Please analyze this experimental dataset and determine the next action with the strongest scientific rationale.
+Use the experimental Skills already installed. If required inputs, materials, or capabilities are missing, state what is missing explicitly,
+and make sure the final result can be traced to the relevant execution record and evidence.
+```
+
+LabOntology checks the available capabilities against the current task, selects a next action, and requests human input or confirmation when needed.
+
+---
+
+## Example Tasks
+
+The repository includes six independent, end-to-end examples.
+
+| Example | Scenario |
+| --- | --- |
+| **Small-molecule analysis** | Use domain Skills to analyze molecular or chemical data |
+| **Lead-compound screening** | Organize candidate assessment and screening |
+| **ELISA data analysis** | Analyze experimental assay results |
+| **Physics simulation** | Run a science workflow for simulation and computation |
+| **Synthetic biology simulation** | Coordinate a computational synthetic-biology task |
+| **Crystal-structure analysis** | Analyze structural-science data |
+
+Each example includes Skill installation prompts, task prompts, and completion criteria.
+
+➡️ **[View all English examples](./Examples.md)**<br>
+➡️ **[查看中文示例](./Examples.zh.md)**
+
+---
+
+## Safety and Execution Boundaries
+
+LabOntology takes a conservative approach to actions that affect the physical world and to actions without sufficient evidence.
+
+> [!WARNING]
+> Equipment-related and other high-impact actions **are not executed automatically**.
+
+LabOntology stops or requests human confirmation when:
+
+- Required materials, samples, parameters, or evidence are missing;
+- The current workflow library has no suitable registered Skill;
+- A Skill's declared input conditions are not met;
+- An action requires human approval, authorization, or confirmation;
+- Another action is already waiting;
+- It cannot confirm that a result was actually recorded in Runtime.
+
+Read-only fallback does not bypass these checks.
+
+---
+
+## Repository Layout
+
+```text
+LabOntology/
+├── skills/
+│   └── labontology-skill/
+│       ├── SKILL.md                 # Unified entry point and ongoing supervision rules
+│       ├── references/              # Ontology definitions and Runtime protocol
+│       │   └── runtime-protocol.md
+│       └── scripts/                 # Workflow library, task state, and result records
+├── Examples.md                      # English examples
+├── Examples.zh.md                   # Chinese examples
+├── README.md                        # English documentation
+└── README.zh.md                     # Chinese documentation
+```
+
+### Key Files
+
+- **`SKILL.md`**: Defines LabOntology's triggers, task-entry protocol, execution boundaries, and user-facing response rules.
+- **`references/`**: Contains ontology definitions and the Runtime protocol.
+- **`scripts/`**: Implements workflow-library setup, Mission state management, execution state, and result recording.
+- **`Examples.md` / `Examples.zh.md`**: End-to-end usage examples.
+
+---
+
+## Design Principles
+
+**One unified entry point for experimental requests**<br>
+Experimental tasks should not bypass the supervision layer to call arbitrary capabilities directly.
+
+**Advance one clearly bounded action at a time**<br>
+Choose the next action from the current state instead of generating a long, unchecked chain of operations.
+
+**Read the document before using a capability**<br>
+Do not judge a candidate Skill by its name alone; verify its full document, inputs, outputs, and constraints.
+
+**Require evidence before completing a task**<br>
+A task can finish only when the result has been recorded by Runtime and can be read again from Context.
+
+**Keep human oversight for high-impact actions**<br>
+Missing inputs, approvals, and actions in the physical world remain explicit control points.
+
+**Improve continuously without silent self-modification**<br>
+Past experience can inform future decisions, but workflow-library updates must be reviewed and reversible.
+
+---
+
+## What LabOntology Is—and Is Not
+
+**LabOntology is:**
+
+- An ontology-based representation of experimental tasks and capabilities;
+- A unified Agent Skill entry point for autonomous laboratory tasks;
+- A stateful Runtime protocol for planning, execution, recovery, and completion;
+- A traceability layer linking tasks, Skill executions, results, and evidence;
+- A controlled mechanism for continuous maintenance of experimental workflows.
+
+**LabOntology is not:**
+
+- A replacement for chemistry, biology, simulation, or data-analysis Skills;
+- A general-purpose instrument-control system;
+- An authorization mechanism that bypasses laboratory safety rules or approval processes;
+- A system that automatically rewrites its workflow graph after every failure.
+
+---
+
+## Project Philosophy
+
+A useful scientific agent needs more than access to tools.
+
+It also needs to know:
+
+**What is the experimental goal → what capabilities are available → which conditions are met → what can be done now → what actually happened → what evidence supports the result → what should happen next?**
+
+LabOntology provides a shared structure that connects these questions.
+
+---
+
+<div align="center">
+
+**Scientific agents should not only be capable; they should also be stateful, traceable, and governable.**
+
+[Examples](./Examples.md) · [中文 README](./README.zh.md)
+
+</div>
