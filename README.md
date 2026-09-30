@@ -1,10 +1,9 @@
 <p align="center">
-  <img src="assets/labontology-banner.svg" alt="LabOntology: coordinate lab capabilities and move tasks forward around experimental goals" width="100%">
+  <img src="assets/labontology-banner.svg" alt="LabOntology" width="100%">
 </p>
 
-<h2 align="center">Coordinate lab capabilities and move tasks forward around experimental goals.</h2>
-
 <p align="center">
+  <a href="#overview">Overview</a> ·
   <a href="#execution-architecture-for-autonomous-experiments">Execution architecture</a> ·
   <a href="#organizing-and-advancing-experimental-tasks">Workflow</a> ·
   <a href="#schema-modeling">Schema</a> ·
@@ -14,6 +13,8 @@
 </p>
 
 <p align="center">English · <a href="README.zh.md">中文</a></p>
+
+<a id="overview"></a>
 
 LabOntology is an agent Skill package for autonomous laboratory work. It helps agents organize experimental knowledge, workflow structure, execution constraints, equipment capabilities, and result data into a shared information network they can query and reason over to guide execution. Agents can use this network to plan tasks, match experimental capabilities, check execution conditions, and record each result with its supporting evidence. It supports the task lifecycle from planning and execution through monitoring and review.
 

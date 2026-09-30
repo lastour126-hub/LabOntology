@@ -1,10 +1,9 @@
 <p align="center">
-  <img src="assets/labontology-banner.svg" alt="LabOntology：围绕实验目标，组织实验能力并持续推进任务。" width="100%">
+  <img src="assets/labontology-banner.svg" alt="LabOntology" width="100%">
 </p>
 
-<h2 align="center">围绕实验目标，组织实验能力并持续推进任务。</h2>
-
 <p align="center">
+  <a href="#overview">总览</a> ·
   <a href="#自主实验的执行架构">执行架构</a> ·
   <a href="#实验任务的组织与推进">工作流</a> ·
   <a href="#schema-建模">Schema 模型</a> ·
@@ -14,6 +13,8 @@
 </p>
 
 <p align="center">中文 · <a href="README.md">English</a></p>
+
+<a id="overview"></a>
 
 LabOntology 是一个面向自主实验场景的智能体技能包，旨在帮助 Agent 将实验知识、流程结构、执行约束、设备能力与结果数据组织成一张可查询、可推理并用于执行的实验信息网络。Agent 据此更好地规划任务、匹配实验能力、检查执行条件，并记录每一步结果及其依据，同时支持实验任务从规划和执行到监控与复盘。
 
